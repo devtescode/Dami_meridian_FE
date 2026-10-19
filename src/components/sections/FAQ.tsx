@@ -1,128 +1,211 @@
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { ChevronDown, MessageCircle, Phone } from 'lucide-react'
+import { Section } from '@/components/Section'
+import { BRAND, CONTACT, LINKS } from '@/lib/brand'
 
+interface FaqItem {
+  id: string
+  question: string
+  /** Rich text so answers can embed contact links where that helps. */
+  answer: ReactNode
+}
 
-import { useState, useRef, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
-import { getGeneralWhatsAppLink } from '@/lib/whatsapp'
-
-const faqs = [
+/**
+ * Only questions we can answer truthfully. No return windows, delivery
+ * timelines, warranty terms or payment methods are stated here — where a
+ * policy would be needed but has not been supplied, the answer points the
+ * customer to WhatsApp so we confirm it in the moment instead of guessing.
+ */
+const faqs: FaqItem[] = [
   {
-    id: 1,
+    id: 'order',
     question: 'How do I place an order?',
-    answer: 'Simply click the "Order Now" button on any product, and you&apos;ll be redirected to WhatsApp where you can chat with us directly to complete your order.'
+    answer:
+      'Tap "Order on WhatsApp" on any product. A chat opens pre-filled with the product name, price and image — you confirm the order in the chat and we take it from there.',
   },
   {
-    id: 2,
-    question: 'What is your return policy?',
-    answer: 'We offer a 30-day return policy for all items. If you&apos;re not completely satisfied with your purchase, you can return it for a full refund or exchange.'
+    id: 'products',
+    question: 'What products do you sell?',
+    answer:
+      "Men's and women's round-neck t-shirts, unisex joggers, perfumes and jewellery. The full range lives in the shop, and every piece has its own page.",
   },
   {
-    id: 3,
-    question: 'Do you offer custom designs?',
-    answer: 'Yes! We specialize in custom jewelry designs. Contact us on WhatsApp or email to discuss your unique design ideas with our artisans.'
+    id: 'sizes-and-colours',
+    question: 'Do you offer sizes and colours?',
+    answer:
+      'Only for the products that list them. Where sizes or colours are available they are shown on the product page, so you can choose before you message us.',
   },
   {
-    id: 4,
-    question: 'What materials do you use?',
-    answer: 'We use only the finest materials including 18K gold, premium diamonds, sapphires, emeralds, and other precious gemstones.'
+    id: 'availability',
+    question: 'How do I know which fragrances or pieces are available?',
+    answer:
+      'Availability is shown on each product. If a fragrance or piece is listed as unavailable, message us on WhatsApp and we will confirm when it is back.',
   },
   {
-    id: 5,
-    question: 'How long does delivery take?',
-    answer: 'Standard delivery typically takes 5-7 business days. Custom orders may take 2-4 weeks depending on complexity.'
+    id: 'location',
+    question: 'Where are you based?',
+    answer: `We are based in ${BRAND.location}. Every order is arranged personally over WhatsApp.`,
   },
   {
-    id: 6,
-    question: 'Are your jewelry pieces certified?',
-    answer: 'Yes, all our diamond and gemstone jewelry comes with authentic certifications from recognized gemological institutes.'
-  }
+    id: 'contact',
+    question: 'How do I contact you?',
+    answer: (
+      <>
+        WhatsApp{' '}
+        <a
+          href={LINKS.whatsapp}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline underline-offset-4 transition-colors hover:text-gold-light"
+        >
+          {CONTACT.whatsapp}
+        </a>{' '}
+        or call{' '}
+        <a
+          href={LINKS.tel}
+          className="text-primary underline underline-offset-4 transition-colors hover:text-gold-light"
+        >
+          {CONTACT.phone}
+        </a>
+        . We are happy to answer anything about a piece before you order.
+      </>
+    ),
+  },
 ]
 
 export default function FAQ() {
-  const [openId, setOpenId] = useState<number | null>(null)
-  const sectionRef = useRef<HTMLDivElement>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const triggerRefs = useRef<Array<HTMLButtonElement | null>>([])
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('animate-fade-in')
-        }
-      },
-      { threshold: 0.1 }
-    )
+  /** Arrow-key movement between headers, following the WAI-ARIA accordion pattern. */
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const last = faqs.length - 1
+    let target: number | null = null
 
-    if (sectionRef.current) observer.observe(sectionRef.current)
-    return () => observer.disconnect()
-  }, [])
+    switch (event.key) {
+      case 'ArrowDown':
+        target = index === last ? 0 : index + 1
+        break
+      case 'ArrowUp':
+        target = index === 0 ? last : index - 1
+        break
+      case 'Home':
+        target = 0
+        break
+      case 'End':
+        target = last
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    triggerRefs.current[target]?.focus()
+  }
 
   return (
-    <section ref={sectionRef} className="relative py-4 bg-gradient-to-b from-background via-secondary/10 to-background overflow-hidden">
-      {/* Background elements */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none">
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-float"></div>
-      </div>
+    <Section
+      id="faq"
+      eyebrow="Support"
+      title="Frequently Asked Questions"
+      description="The practical details — ordering, sizing and availability — answered plainly. Anything else, message us on WhatsApp and we will confirm it for you."
+    >
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="flex flex-col gap-4">
+          {faqs.map((faq, index) => {
+            const isOpen = openId === faq.id
+            const triggerId = `faq-trigger-${faq.id}`
+            const panelId = `faq-panel-${faq.id}`
 
-      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section header */}
-        <div className="text-center mb-20 animate-fade-in-up">
-          <p className="text-primary text-sm font-semibold tracking-widest uppercase mb-1">
-            Support
-          </p>
-          <h2 className="text-5xl sm:text-6xl font-bold text-foreground mb-3">
-            <span className="text-gradient">Frequently Asked Questions</span>
-          </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground">
-            Find answers to all your questions about ROCKYLUXE and our services
-          </p>
-        </div>
-
-        <div className="space-y-4 animate-fade-in-up animation-delay-200">
-          {faqs.map((faq, index) => (
-            <div
-              key={faq.id}
-              className="animate-fade-in-up"
-              style={{ animationDelay: `${index * 0.08}s` }}
-            >
-              <button
-                onClick={() => setOpenId(openId === faq.id ? null : faq.id)}
-                className="w-full flex justify-between items-center p-6 sm:p-7 glass border border-border/50 rounded-xl hover:border-primary/50 mt-4 hover:shadow-[0_0_40px_rgba(200,162,74,0.2)] transition-all duration-300 group"
+            return (
+              <div
+                key={faq.id}
+                className="glass overflow-hidden rounded-2xl"
               >
-                <span className="text-lg sm:text-xl font-bold text-foreground text-left group-hover:text-primary transition-colors">
-                  {faq.question}
-                </span>
-                <ChevronDown
-                  className={`text-primary flex-shrink-0 transition-transform duration-500 ${
-                    openId === faq.id ? 'rotate-180' : ''
-                  }`}
-                  size={28}
-                />
-              </button>
+                <h3>
+                  <button
+                    type="button"
+                    id={triggerId}
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    onClick={() => setOpenId(isOpen ? null : faq.id)}
+                    onKeyDown={(event) => handleKeyDown(event, index)}
+                    ref={(node) => {
+                      triggerRefs.current[index] = node
+                    }}
+                    className="group flex w-full items-center justify-between gap-5 px-5 py-5 text-left transition-colors duration-300 sm:px-7 sm:py-6"
+                  >
+                    <span
+                      className={`font-display text-lg transition-colors duration-300 sm:text-xl ${
+                        isOpen ? 'text-primary' : 'text-foreground group-hover:text-primary'
+                      }`}
+                    >
+                      {faq.question}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 ${
+                        isOpen
+                          ? 'border-primary/50 text-primary'
+                          : 'border-border text-muted-foreground group-hover:border-primary/50 group-hover:text-primary'
+                      }`}
+                    >
+                      <ChevronDown
+                        size={20}
+                        className={`transition-transform duration-300 ${
+                          isOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </h3>
 
-              {openId === faq.id && (
-                <div className="px-6 sm:px-7 py-6 glass border border-border/50 border-t-0 rounded-b-xl bg-secondary/30 animate-fade-in">
-                  <p className="text-muted-foreground leading-relaxed text-lg">{faq.answer}</p>
+                {/* The panel stays in the DOM so aria-controls always resolves. */}
+                <div
+                  id={panelId}
+                  role="region"
+                  aria-labelledby={triggerId}
+                  hidden={!isOpen}
+                  className="border-t border-border/60 px-5 pb-6 pt-5 sm:px-7"
+                >
+                  <div className="animate-fade-in text-base leading-relaxed text-muted-foreground sm:text-lg">
+                    {faq.answer}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </div>
 
-        {/* CTA */}
-        <div className="mt-15 text-center p-8 sm:p-12 glass border border-border/50 rounded-2xl hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 animate-fade-in-up animation-delay-400">
-          <h3 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">Didn&apos;t find your answer?</h3>
-          <p className="text-lg text-muted-foreground mb-8">
-            Chat with us on WhatsApp or email us directly. Our team is here to help!
+        <div className="glass mt-12 rounded-2xl px-6 py-10 text-center sm:px-12 sm:py-14">
+          <div className="rule-gold mx-auto mb-8 w-16" aria-hidden="true" />
+          <h3 className="font-display text-2xl text-foreground sm:text-3xl">
+            Didn&apos;t find your answer?
+          </h3>
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Send us a message and we will answer you directly — no policy documents,
+            just a real reply from the brand.
           </p>
-          <a
-            href={getGeneralWhatsAppLink()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block px-10 py-4 bg-primary text-primary-foreground font-bold rounded-lg hover:shadow-[0_0_50px_rgba(200,162,74,0.5)] transition-all duration-300 hover:scale-105"
-          >
-            Chat on WhatsApp Now
-          </a>
+          <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <a
+              href={LINKS.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-gold btn-gold-hover inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-8 py-4 text-sm"
+            >
+              <MessageCircle size={18} aria-hidden="true" />
+              Chat on WhatsApp
+            </a>
+            <a
+              href={LINKS.tel}
+              className="btn-outline-gold btn-outline-gold-hover inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full px-8 py-4 text-sm"
+            >
+              <Phone size={18} aria-hidden="true" />
+              {CONTACT.phone}
+            </a>
+          </div>
         </div>
       </div>
-    </section>
+    </Section>
   )
 }

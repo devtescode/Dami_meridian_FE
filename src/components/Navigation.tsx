@@ -1,132 +1,400 @@
-import { useState, useEffect } from 'react'
+/**
+ * DAMI MERIDIAN — sticky primary navigation.
+ *
+ * The bar starts light so the hero artwork reads through it, then frosts over
+ * with a gold hairline once the page scrolls. Everything below the lg
+ * breakpoint collapses into a slide-in drawer so the header never wraps or
+ * overflows on a 320px screen.
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Instagram, Menu, MessageCircle, Music, Shield, X } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { BRAND, LINKS, SOCIALS } from '@/lib/brand'
+import { Container } from '@/components/Section'
 
-export default function Navigation() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [isScrolled, setIsScrolled] = useState(false)
+/** In-page destinations; the ids match the section anchors rendered by the page. */
+const NAV_LINKS = [
+  { label: 'Home', id: 'home' },
+  { label: 'Shop', id: 'shop' },
+  { label: 'Collections', id: 'collections' },
+  { label: 'About', id: 'about' },
+  { label: 'Contact', id: 'contact' },
+] as const
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
-      if (isOpen) setIsOpen(false)
-    }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [isOpen])
+type SocialEntry = (typeof SOCIALS)[number]
 
-  const scrollToSection = (id: string) => {
-    const element = document.getElementById(id)
-    element?.scrollIntoView({ behavior: 'smooth' })
-    setIsOpen(false)
+/** TikTok has no first-party lucide glyph, so its music note stands in. */
+const SOCIAL_ICONS: Record<SocialEntry['id'], LucideIcon> = {
+  instagram: Instagram,
+  tiktok: Music,
+}
+
+/** Focusable nodes used to keep Tab cycling inside the open drawer. */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * A social handle. The brand has no verified profile URLs yet, so the handle
+ * is rendered as plain text rather than a link to an invented URL.
+ *
+ * The platform name is injected as visually hidden text instead of an
+ * `aria-label`: a <span> has an implicit `generic` role, and `aria-label` is
+ * prohibited on `generic`, so the platform name would never reach a screen
+ * reader. The visible label stays the handle, so the two handles never sound
+ * identical out loud.
+ */
+function SocialHandle({
+  social,
+  className = '',
+}: {
+  social: SocialEntry
+  className?: string
+}) {
+  const Icon = SOCIAL_ICONS[social.id]
+  const label = `${social.label} — ${social.handle}`
+  const content = (
+    <>
+      <Icon className="h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
+      <span className="sr-only normal-case">{social.label} — </span>
+      <span className="whitespace-nowrap tracking-wider">{social.handle}</span>
+    </>
+  )
+
+  const base = `inline-flex items-center gap-1.5 text-xs uppercase text-muted-foreground/70 ${className}`
+
+  if (!social.url) {
+    return (
+      <span title={label} className={base}>
+        {content}
+      </span>
+    )
   }
 
-  // Render overlay and menu at the top level for full viewport coverage
+  return (
+    <a
+      href={social.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={label}
+      className={`${base} transition-colors hover:text-primary`}
+    >
+      {content}
+    </a>
+  )
+}
+
+export function Navigation() {
+  const [scrolled, setScrolled] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // The frosted surface and the gold hairline only appear once the page moves.
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 24)
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Leaving the mobile breakpoint must never leave the drawer stuck open.
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) setMenuOpen(false)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Lock the page behind the drawer so touch scrolling cannot fight it.
+  useEffect(() => {
+    if (!menuOpen) return
+    const { body } = document
+    const previousOverflow = body.style.overflow
+    const previousPaddingRight = body.style.paddingRight
+    // Compensate for the vanishing scrollbar so the page does not jump sideways.
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+    body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`
+    return () => {
+      body.style.overflow = previousOverflow
+      body.style.paddingRight = previousPaddingRight
+    }
+  }, [menuOpen])
+
+  // Escape closes the drawer and hands focus back to the trigger.
+  useEffect(() => {
+    if (!menuOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+        toggleRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [menuOpen])
+
+  // Move focus into the drawer as soon as it opens.
+  useEffect(() => {
+    if (menuOpen) closeRef.current?.focus()
+  }, [menuOpen])
+
+  const closeMenu = useCallback(() => {
+    // Only pull focus back when the drawer was actually open.
+    if (menuOpen) toggleRef.current?.focus()
+    setMenuOpen(false)
+  }, [menuOpen])
+
+  const scrollToSection = useCallback(
+    (id: string) => {
+      // Honour the OS "reduce motion" preference when choosing the behaviour.
+      const behavior: ScrollBehavior = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches
+        ? 'auto'
+        : 'smooth'
+
+      if (id === 'home') {
+        window.scrollTo({ top: 0, behavior })
+        closeMenu()
+        return
+      }
+
+      const element = document.getElementById(id)
+      if (element) {
+        // Offset the target so the sticky bar never covers a section heading.
+        element.style.scrollMarginTop = '5rem'
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+      closeMenu()
+    },
+    [closeMenu],
+  )
+
+  const handlePanelKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return
+    const panel = panelRef.current
+    if (!panel) return
+    const focusable = Array.from(
+      panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+    ).filter((node) => node.offsetParent !== null)
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement
+    if (event.shiftKey && (active === first || active === panel)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <>
-      {/* Overlay Blur - covers the whole viewport and closes menu on click */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-40 backdrop-blur-3xl bg-black/60 opacity-100 transition-all duration-500"
-          style={{
-            WebkitBackdropFilter: 'blur(32px) saturate(180%)',
-            backdropFilter: 'blur(32px) saturate(180%)',
-            transition: 'backdrop-filter 0.5s, background 0.5s, opacity 0.5s',
-          }}
-          aria-hidden={!isOpen}
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-
-      {/* Animated Mobile Menu */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-smooth ${
-        isScrolled 
-          ? 'bg-background/95 glass border-none border-border/50 backdrop-blur-sm' 
-          : 'bg-background border-none border-transparent'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            {/* Logo */}
-            <div className="flex items-center space-x-2">
-              <img
-                src="/logo.jpg"
-                alt="ROCKYLUXE"
-                className="w-10 h-10 object-cover rounded"
-              />
-              <span className="text-primary font-bold text-xl hidden sm:inline">ROCKYLUXE</span>
-            </div>
-
-            {/* Desktop Menu */}
-            <div className="hidden md:flex items-center space-x-8">
-              <button onClick={() => scrollToSection('shop')} className="text-foreground hover:text-primary transition-colors">
-                Shop
-              </button>
-              <button onClick={() => scrollToSection('about')} className="text-foreground hover:text-primary transition-colors">
-                About
-              </button>
-              <button onClick={() => scrollToSection('contact')} className="text-foreground hover:text-primary transition-colors">
-                Contact
-              </button>
-              <Link to="/admin" className="px-4 py-2 bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity">
-                Admin
-              </Link>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="md:hidden text-primary"
-            >
-              {isOpen ? "" : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Animated Mobile Menu */}
-        <div
-          className={`md:hidden fixed left-1/2 top-0 z-50 w-[92vw] max-w-sm -translate-x-1/2 transition-transform duration-500 ease-[cubic-bezier(.77,0,.18,1.01)] ${
-            isOpen ? 'translate-y-4 opacity-100 scale-100 pointer-events-auto' : '-translate-y-20 opacity-0 scale-95 pointer-events-none'
-          }`}
-          style={{
-            // boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
-            // border: '1.5px solid rgba(255,255,255,0.18)',
-            borderRadius: '1rem',
-            background: 'rgba(255,255,255,0.15)',
-            backdropFilter: 'blur(18px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(18px) saturate(180%)',
-          }}
-        >
-          <div className="flex flex-col gap-4 py-8 px-7">
-            <span className="text-center text-2xl font-extrabold tracking-widest text-primary drop-shadow-lg mb-2 animate-pulse select-none">
-              MENU
+      <nav
+        aria-label="Primary"
+        className={`sticky top-0 z-50 w-full transition-all duration-500 ease-out ${
+          scrolled
+            ? 'glass-dark shadow-lg shadow-black/40'
+            : 'bg-background/40 backdrop-blur-md'
+        }`}
+      >
+        <Container className="flex h-16 items-center justify-between gap-3 sm:h-20">
+          {/* Brand lockup */}
+          <button
+            type="button"
+            onClick={() => scrollToSection('home')}
+            aria-label={`${BRAND.name} — back to top`}
+            className="flex min-w-0 shrink items-center gap-2.5 sm:gap-3"
+          >
+            <img
+              src="/logo-mark.svg"
+              alt={`${BRAND.name} meridian mark`}
+              width={40}
+              height={40}
+              className="h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+            />
+            <span className="min-w-0 truncate font-display text-base leading-none tracking-[0.25em] text-gradient sm:text-lg sm:tracking-[0.3em] lg:text-xl xl:text-2xl">
+              {BRAND.name}
             </span>
-            <button
-              onClick={() => scrollToSection('shop')}
-              className="w-full text-left px-5 py-3 text-xl font-bold text-foreground/90 rounded-xl bg-gradient-to-r from-primary/10 to-transparent hover:from-primary/30 hover:text-primary transition-all shadow-sm backdrop-blur-md border border-primary/20"
-            >
-              Shop
-            </button>
-            <button
-              onClick={() => scrollToSection('about')}
-              className="w-full text-left px-5 py-3 text-xl font-bold text-foreground/90 rounded-xl bg-gradient-to-r from-secondary/10 to-transparent hover:from-secondary/30 hover:text-secondary transition-all shadow-sm backdrop-blur-md border border-secondary/20"
-            >
-               About
-            </button>
-            <button
-              onClick={() => scrollToSection('contact')}
-              className="w-full text-left px-5 py-3 text-xl font-bold text-foreground/90 rounded-xl bg-gradient-to-r from-accent/10 to-transparent hover:from-accent/30 hover:text-accent transition-all shadow-sm backdrop-blur-md border border-accent/20"
-            >
-               Contact
-            </button>
+          </button>
+
+          {/* Desktop navigation */}
+          <ul className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+            {NAV_LINKS.map((link) => (
+              <li key={link.id}>
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(link.id)}
+                  className="group relative inline-flex min-h-[2.75rem] items-center px-2 text-xs uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {link.label}
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-2 bottom-2 h-px origin-left scale-x-0 bg-primary/70 transition-transform duration-300 group-hover:scale-x-100"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {/* Secondary links and CTA */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            {/* Handles only — the brand has no verified profile URLs yet. */}
+            {/* <div className="hidden items-center gap-3 xl:flex">
+              {SOCIALS.map((social) => (
+                <SocialHandle key={social.id} social={social} />
+              ))}
+            </div> */}
+
             <Link
               to="/admin"
-              className="w-full block px-5 py-3 text-xl font-bold bg-gradient-to-r from-primary to-secondary text-white rounded-xl hover:opacity-90 text-center transition-all shadow-lg border border-primary/40"
+              className="hidden min-h-[2.75rem] items-center gap-1.5 rounded-full border border-border px-3 text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary md:inline-flex"
             >
+              <Shield className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
               Admin
             </Link>
+
+            <a
+              href={LINKS.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-gold btn-gold-hover hidden min-h-[2.75rem] items-center gap-2 rounded-full px-3 text-xs uppercase tracking-[0.16em] sm:inline-flex"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              WhatsApp
+            </a>
+
+            <button
+              ref={toggleRef}
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-nav-panel"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-primary/60 hover:text-primary lg:hidden"
+            >
+              {menuOpen ? (
+                <X className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <Menu className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+        </Container>
+
+        {/* Gold hairline — intensifies once the page has scrolled */}
+        <div
+          aria-hidden="true"
+          className={`h-px w-full bg-gradient-to-r from-transparent via-primary to-transparent transition-opacity duration-500 ${
+            scrolled ? 'opacity-70' : 'opacity-25'
+          }`}
+        />
+      </nav>
+
+      {/* Drawer lives outside the sticky bar so it is never clipped or blurred. */}
+      <div
+        className={`fixed inset-0 z-[60] overflow-hidden lg:hidden ${
+          menuOpen ? 'pointer-events-auto' : 'pointer-events-none'
+        }`}
+      >
+        <div
+          aria-hidden="true"
+          onClick={closeMenu}
+          className={`absolute inset-0 bg-background/85 backdrop-blur-sm transition-opacity duration-300 ${
+            menuOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+
+        <div
+          id="mobile-nav-panel"
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site menu"
+          inert={!menuOpen}
+          onKeyDown={handlePanelKeyDown}
+          className={`glass-dark absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col transition-transform duration-300 ease-out ${
+            menuOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-px bg-primary/50"
+          />
+
+          <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
+            <span className="font-display text-base tracking-[0.25em] text-gradient">
+              {BRAND.name}
+            </span>
+            <button
+              ref={closeRef}
+              type="button"
+              onClick={closeMenu}
+              aria-label="Close menu"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="scrollbar-slim flex-1 overflow-y-auto px-4 py-5">
+            <ul className="flex flex-col gap-1">
+              {NAV_LINKS.map((link) => (
+                <li key={link.id}>
+                  <button
+                    type="button"
+                    onClick={() => scrollToSection(link.id)}
+                    className="flex min-h-[3rem] w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left font-display text-2xl text-foreground/90 transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    {link.label}
+                    <span
+                      aria-hidden="true"
+                      className="h-px w-8 shrink-0 bg-primary/40"
+                    />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="border-t border-border/70 px-5 py-5">
+            <Link
+              to="/admin"
+              onClick={closeMenu}
+              className="flex min-h-[2.75rem] items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-primary"
+            >
+              <Shield className="h-4 w-4 text-primary/80" aria-hidden="true" />
+              Admin
+            </Link>
+
+            <div className="mt-3 flex flex-col gap-2">
+              {SOCIALS.map((social) => (
+                <SocialHandle key={social.id} social={social} />
+              ))}
+            </div>
+
+            <a
+              href={LINKS.whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-gold btn-gold-hover mt-5 inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-full px-5 text-xs uppercase tracking-[0.18em]"
+            >
+              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+              WhatsApp
+            </a>
           </div>
         </div>
-      </nav>
+      </div>
     </>
   )
 }
+
+export default Navigation

@@ -13,4 +13,9 @@ export default defineConfig({
     port: 3000,
     open: true,
   },
+  build: {
+    // The deploy cache rules treat /assets/* as fingerprinted and immutable,
+    // so the bundle output path has to stay `assets` (the Vite default).
+    assetsDir: 'assets',
+  },
 })

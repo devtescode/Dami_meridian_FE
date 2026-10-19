@@ -1,100 +1,142 @@
-
-import { ChevronDown } from 'lucide-react'
+import { ArrowRight, Gem, Heart, MessageCircle, ShieldCheck, Truck } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { Container } from '@/components/Section'
+import { BRAND } from '@/lib/brand'
 import { getGeneralWhatsAppLink } from '@/lib/whatsapp'
 
+/**
+ * Qualitative promises supplied by the brand — labels only.
+ * No figures are shown because the business has not supplied verified metrics.
+ */
+const TRUST_POINTS: { icon: LucideIcon; label: string }[] = [
+  { icon: Gem, label: 'Premium Quality' },
+  { icon: ShieldCheck, label: 'Secure Ordering' },
+  { icon: Truck, label: 'Reliable Delivery' },
+  { icon: Heart, label: 'Customer Satisfaction' },
+]
 
 export default function Hero() {
-  const scrollToSection = (id: string) => {
-    const element = document.getElementById(id)
-    element?.scrollIntoView({ behavior: 'smooth' })
+  const scrollToCollections = () => {
+    document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   return (
-    <section id="home" className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
-      {/* Background Image */}
-      <div className="absolute inset-0 z-0">
-
-        <img
-          src="/hero-jewelry.jpg"
-          alt="Luxury Jewelry"
-
-          className="object-cover"
-
-
+    <section
+      id="home"
+      aria-labelledby="hero-heading"
+      className="relative flex min-h-[100dvh] flex-col justify-center overflow-hidden bg-background"
+    >
+      {/* Ambient gold light so the flat black canvas still feels lit */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-24 top-16 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-float" />
+        <div
+          className="absolute -right-20 bottom-4 h-96 w-96 rounded-full bg-primary/10 blur-3xl animate-float"
+          style={{ animationDelay: '1.6s' }}
         />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-surface/70 to-transparent" />
       </div>
 
-      {/* Dark Overlay */}
-      <div className="absolute inset-0 z-1 bg-black/60 backdrop-blur-sm"></div>
+      <Container className="pt-28 pb-16 sm:pt-32 sm:pb-20 lg:pt-36 lg:pb-24">
+        <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14 xl:gap-20">
+          {/* ---- Copy column ---- */}
+          <div className="min-w-0 animate-fade-in-up">
+            <p className="eyebrow mb-5">Fashion · Fragrance · Jewellery</p>
 
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 z-2 overflow-hidden">
-        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float opacity-40"></div>
-        <div className="absolute bottom-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-float opacity-30" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/2 w-80 h-80 bg-primary/15 rounded-full blur-3xl animate-float opacity-25" style={{ animationDelay: '2s' }}></div>
-      </div>
+            <h1
+              id="hero-heading"
+              className="font-display text-5xl leading-[0.95] sm:text-6xl lg:text-7xl xl:text-8xl"
+            >
+              {/* One readable slogan for assistive tech; the stacked words are decorative repeats */}
+              <span className="sr-only">{BRAND.slogan}</span>
+              {BRAND.sloganWords.map((word, index) => (
+                <span
+                  key={word}
+                  aria-hidden="true"
+                  className={
+                    index === BRAND.sloganWords.length - 1
+                      ? 'block w-fit text-gradient'
+                      : 'block text-foreground'
+                  }
+                >
+                  {word}
+                </span>
+              ))}
+            </h1>
 
-      {/* Content */}
-      <div className="relative z-20 text-center px-4 sm:px-6 max-w-5xl">
-        {/* Main heading */}
-        <div className="mb-8 animate-fade-in-up">
-          <p className="text-primary text-sm sm:text-base font-semibold tracking-widest uppercase mb-4">
-            Welcome to elegance
-          </p>
-          <h1 className="text-6xl sm:text-7xl lg:text-8xl font-bold mb-4 text-foreground">
-            <span className="text-gradient drop-shadow-xl">ROCKYLUXE</span>
-          </h1>
-          <div className="w-24 h-1 bg-gradient-to-r from-transparent via-primary to-transparent mx-auto mb-8"></div>
-        </div>
+            <div className="rule-gold mt-8 w-24" aria-hidden="true" />
 
-        {/* Subtitle */}
-        <p className="text-lg sm:text-xl lg:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed animate-fade-in-up animation-delay-200">
-          Discover exquisite luxury jewelry crafted with precision and elegance. Each piece tells a story of timeless beauty.
-        </p>
+            <p className="mt-8 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Discover your signature style with quality fashion, captivating fragrances, and carefully selected jewelry designed to express who you are.
+            </p>
 
-        {/* CTA Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-20 animate-fade-in-up animation-delay-300">
-          <button
-            onClick={() => document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' })}
-            className="group relative px-8 sm:px-10 py-4 bg-primary text-primary-foreground font-bold rounded-lg text-base sm:text-lg hover:shadow-[0_0_50px_rgba(200,162,74,0.6)] transition-all duration-300 hover:scale-105 overflow-hidden"
-          >
-            <span className="relative z-10">Explore Collection</span>
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/80 to-primary opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          </button>
-          <a
-            href={getGeneralWhatsAppLink()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-8 sm:px-10 py-4 border-2 border-primary text-primary font-bold rounded-lg text-base sm:text-lg hover:bg-primary hover:text-white transition-all duration-300 hover:scale-105 backdrop-blur-sm"
-          >
-            Chat on WhatsApp
-          </a>
-        </div>
+            <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={scrollToCollections}
+                className="btn-gold btn-gold-hover inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-8 text-sm font-medium tracking-[0.06em] sm:text-base"
+              >
+                Explore Collections
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </button>
 
-        {/* Trust badges */}
-        <div className="flex flex-wrap justify-center gap-4 sm:gap-8 mb-16 animate-fade-in-up animation-delay-400">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            100% Authentic
+              <a
+                href={getGeneralWhatsAppLink()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-outline-gold btn-outline-gold-hover inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-8 text-sm font-medium tracking-[0.06em] sm:text-base"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                Chat on WhatsApp
+              </a>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            Lifetime Warranty
-          </div>
-          {/* <div className="flex items-center gap-2 text-muted-foreground text-sm">
-            <span className="w-2 h-2 bg-primary rounded-full"></span>
-            Free Shipping
-          </div> */}
-        </div>
-      </div>
 
-      {/* Scroll Indicator */}
-      <div className="absolute bottom-8 left-1/2 z-20 transform -translate-x-1/2 animate-float cursor-pointer" onClick={() => document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' })}>
-        <div className="flex flex-col items-center gap-2">
-          <p className="text-xs text-muted-foreground">Scroll to explore</p>
-          <ChevronDown size={24} className="text-primary animate-bounce" />
+          {/* ---- Imagery column ---- */}
+          <div className="relative min-w-0 animate-slide-in-right">
+            {/* Capped width keeps the frame a tall portrait rather than a letterbox crop */}
+            <div className="relative mx-auto w-full max-w-[20rem] sm:max-w-[22rem] lg:max-w-[24rem] xl:max-w-[28rem]">
+              {/* Halo sits behind the frame so the hairline border reads as lit */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -inset-5 rounded-[2.75rem] bg-primary/15 blur-3xl"
+              />
+
+              <figure className="relative h-[22rem] max-h-[70vh] overflow-hidden rounded-3xl gold-hairline shadow-2xl shadow-primary/20 animate-drift sm:h-[26rem] lg:h-[30rem] xl:h-[32rem]">
+                <img
+                  src="/images/hero-editorial.jpg"
+                  alt="Black and white editorial portrait of a model wearing gold rings and earrings, resting her hands on a white plinth"
+                  width={1400}
+                  height={2100}
+                  loading="eager"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+                {/* Fade the photograph into the page background so the frame sits inside the layout */}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent"
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-background/70 via-transparent to-transparent"
+                />
+              </figure>
+            </div>
+          </div>
         </div>
-      </div>
+
+        {/* ---- Trust indicators: 2x2 on mobile, four across from sm ---- */}
+        <ul className="mt-12 grid grid-cols-2 gap-x-6 gap-y-8 sm:mt-14 sm:grid-cols-4 sm:gap-8">
+          {TRUST_POINTS.map(({ icon: Icon, label }) => (
+            <li key={label} className="flex flex-col items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary">
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="text-sm font-medium leading-snug text-muted-foreground">{label}</span>
+            </li>
+          ))}
+        </ul>
+      </Container>
     </section>
   )
 }

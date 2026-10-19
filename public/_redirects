@@ -1,0 +1,6 @@
+# SPA fallback for Netlify / Cloudflare Pages.
+#
+# The 200 rewrite serves index.html for any path that is not a real file, so
+# /admin deep-links work. Existing static files (assets, images) are served
+# from the filesystem first and are never rewritten.
+/*    /index.html   200

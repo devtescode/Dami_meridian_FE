@@ -1,0 +1,28 @@
+# Cache headers for static hosts that read a `_headers` file
+# (Netlify, Cloudflare Pages, Render static sites).
+#
+# The HTML entry point must never be cached, otherwise a browser can keep
+# serving a stale document that points at an old bundle. Vite fingerprints
+# every asset filename, so those are safe to cache forever.
+#
+# No two patterns below overlap: Cloudflare Pages joins the values of every
+# matching rule into one header, so an overlapping catch-all would produce a
+# contradictory `cache-control` for the fingerprinted assets. Anything not
+# listed here falls back to the host default (`max-age=0, must-revalidate`),
+# which is revalidated on every request and therefore still safe.
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate, max-age=0
+
+/
+  Cache-Control: no-cache, no-store, must-revalidate, max-age=0
+
+# Every SPA route that is served by the HTML entry point needs its own rule.
+/admin
+  Cache-Control: no-cache, no-store, must-revalidate, max-age=0
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/images/*
+  Cache-Control: public, max-age=604800
