@@ -410,3 +410,58 @@
 @utility animate-drift {
   animation: float 9s ease-in-out infinite;
 }
+
+/* ==========================================================================
+   SweetAlert2 — dark theme override (appended; nothing above is touched)
+   Values mirror the admin palette tokens in @theme: surface #141414,
+   border #676767, gold #c8a24a, muted text #b7b7b7, page #0b0b0f.
+   ========================================================================== */
+.swal2-popup {
+  background: #141414;
+  border: 1px solid #676767;
+  border-radius: 1rem;
+  color: #ffffff;
+  max-width: calc(100vw - 2rem);
+}
+
+.swal2-title {
+  color: #ffffff;
+}
+
+.swal2-html-container {
+  color: #b7b7b7;
+}
+
+.swal2-confirm {
+  background-color: #c8a24a;
+  color: #0b0b0f;
+  font-weight: 500;
+  border-radius: 9999px;
+}
+
+.swal2-cancel,
+.swal2-deny {
+  background: transparent;
+  color: #b7b7b7;
+  border: 1px solid #676767;
+  border-radius: 9999px;
+}
+
+/* Stock icon colors (warning yellow / error red / success green) already
+   read fine on the dark surface — only the backdrop needs deepening so the
+   dialog stays the focus. */
+.swal2-container {
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.swal2-timer-progress-bar {
+  background-color: #c8a24a;
+}
+
+/* SweetAlert2 sets outline: none on its styled buttons; restore a visible
+   gold ring for keyboard users. */
+.swal2-popup button:focus-visible,
+.swal2-popup input:focus-visible {
+  outline: 2px solid #c8a24a;
+  outline-offset: 2px;
+}

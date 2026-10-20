@@ -10,30 +10,51 @@ A premium fashion, fragrance and lifestyle storefront — and admin dashboard �
 
 ## What it does
 
-### Storefront (`/`)
+### Storefront
 
-A scroll-driven editorial storefront. Customers browse a live catalogue and place every order through WhatsApp — there is **no cart, checkout or payment integration** (deliberate).
+A dark editorial storefront where **every major screen is its own route** with a real URL (shareable, refreshable, deep-linkable). Customers browse a live catalogue and place every order through WhatsApp — there is **no cart, checkout or payment integration** (deliberate).
+
+| Route | Page | Notes |
+| --- | --- | --- |
+| `/` | `HomePage` | Hero → Categories → Collections → Shop → Brand story → Why → How to order → Testimonials → FAQ → Contact |
+| `/shop` | `ShopPage` | Full catalogue; reads `?collection=` and `?q=` so nav/footer/category links pre-filter it |
+| `/collections` | `CollectionsPage` | The five collections at a glance |
+| `/about` | `AboutPage` | Brand story, values, built only from supplied facts |
+| `/contact` | `ContactPage` | WhatsApp, phone, location + form that hands off to WhatsApp |
+| `/products/:id` | `ProductDetailsPage` | Fetched from the backend by Mongo `_id` (`GET /jewelry/products/:id`) |
+| `*` | `NotFoundPage` | 404 with a way back |
+
+Shared chrome lives in `PublicLayout`: skip link, sticky **Navigation** (wordmark + meridian mark, router links, WhatsApp CTA, admin access, full-screen blurred mobile menu, search → `/shop?q=`), `<main>`, **Footer**, and the floating **WhatsApp button**.
+
+Home sections worth calling out:
 
 | Section | Purpose |
 | --- | --- |
-| **Navigation** | Sticky header: DAMI MERIDIAN wordmark + meridian mark, anchor links (Home, Shop, Collections, About, Contact), WhatsApp CTA, admin access, full-screen blurred mobile menu. |
 | **Hero** | Split editorial hero — "STYLE. SCENT. IDENTITY." with a fashion photograph, *Explore Collections* and *Chat on WhatsApp* CTAs, and four trust indicators (Premium Quality, Secure Ordering, Reliable Delivery, Customer Satisfaction). |
-| **Categories** | Five editorial cards — Men's T-Shirts, Women's T-Shirts, Unisex Joggers, Perfumes, Jewellery — each with category-correct photography and a working *Browse Collection* action that pre-filters the shop. |
-| **Collections** | Bento-style feature grid; selecting a tile filters the shop to that collection. |
-| **Shop** | Live catalogue with **search, collection filter and price sorting**, skeleton loaders, an error state with retry, and an empty state. |
-| **Product modal** | Accessible dialog: large image, prev/next, thumbnail gallery, counter, price, availability, description, size/colour pickers, fragrance details when present, and an *Order on WhatsApp* CTA. |
-| **Brand story** | The DAMI MERIDIAN story, built only from supplied facts. |
-| **Why DAMI MERIDIAN** | Value cards for curation, secure ordering and service. |
-| **How to Order** | The four real steps: browse → view details → order on WhatsApp → confirm. |
+| **Categories** | Five editorial cards — Men's T-Shirts, Women's T-Shirts, Unisex Joggers, Perfumes, Jewellery — each with category-correct photography and a *Browse Collection* link to `/shop?collection=<id>`. |
+| **Collections** | Bento-style feature grid; each tile links to `/shop?collection=<id>`. |
+| **Shop** | Live catalogue with **search, collection filter and price sorting**, skeleton loaders, an error state with retry, and an empty state. Product cards navigate to `/products/:id`. |
+| **Product detail** | Gallery (prev/next/thumbnails/counter), price, availability, description, size/colour pickers for apparel only, fragrance details when present, `Reference:` line, related products, and an *Order on WhatsApp* CTA carrying the product URL. |
 | **Testimonials** | Carousel, currently an honest empty state — no reviews have been supplied yet. |
 | **FAQ** | Accessible accordion (one panel open at a time, `aria-expanded`/`aria-controls`). |
 | **Contact** | WhatsApp, phone and location cards, plus a form that hands the message off to WhatsApp. |
-| **Footer** | Brand block, links, the five collections, contact details, social handles. |
-| **Floating WhatsApp button** | Always-visible chat button. |
 
-### Admin (`/admin`)
+### Admin (`/admin/*`)
 
-A responsive sidebar dashboard for managing the catalogue.
+A responsive sidebar dashboard for managing the catalogue — also fully routed, with `AdminLayout` guarding every protected screen (unauthenticated visitors are redirected to `/admin/login`; an expired JWT triggers `UNAUTHORIZED_EVENT` → cleared session → login with a notice).
+
+| Route | Page |
+| --- | --- |
+| `/admin` | Session-aware redirect (dashboard if valid, login otherwise) |
+| `/admin/login` | `AdminLoginPage` (authenticated → dashboard) |
+| `/admin/register` | `AdminRegisterPage` (offered **only** while `GET /admin/status` reports no admin) |
+| `/admin/dashboard` | `AdminDashboardPage` |
+| `/admin/products` | `AdminProductsPage` |
+| `/admin/products/new` | `AdminAddProductPage` |
+| `/admin/products/:id/edit` | `AdminEditProductPage` |
+| `/admin/settings` | `AdminSettingsPage` |
+| `/admin/change-password` | `AdminChangePasswordPage` |
+| `/admin/*` (unknown) | Redirect to `/admin` |
 
 1. **Bootstrap** — `GET /admin/status` decides the screen: registration is shown **only** when no admin exists, otherwise login.
 2. **Login / register** — email + password; the returned JWT is stored in `sessionStorage` and decoded locally to enforce the 1-hour expiry client-side.
@@ -74,8 +95,8 @@ npm run dev      # http://localhost:3000
 | `npm run dev` | Vite dev server on port 3000, opens automatically |
 | `npm run build` | Production build → `dist/` |
 | `npm run preview` | Serve the production build |
+| `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | `eslint .` — **note: ESLint is not installed and there is no config** |
-| `npx tsc --noEmit` | Typecheck |
 
 ### Path alias
 
@@ -107,37 +128,47 @@ npm run dev      # http://localhost:3000
 │       └── why-*.jpg              # Why-shop cards
 └── src/
     ├── main.tsx               # React root, font imports
-    ├── App.tsx                # Router: "/" → Storefront, "/admin" → AdminPage
-    ├── index.css              # Design system: tokens, utilities, motion
+    ├── App.tsx                # Router: public layout group + guarded admin group (see Routes)
+    ├── index.css              # Design system: tokens, utilities, motion, dialog theme
     ├── vite-env.d.ts          # VITE_API_URL typing
     ├── types/product.ts       # Product, AdminFormProduct, InventorySummary
     ├── hooks/
     │   ├── useProducts.ts     # Catalogue loader (loading / error / refetch)
+    │   ├── usePageTitle.ts    # document.title per page, restored on unmount
     │   ├── use-mobile.ts      # (shadcn)
     │   └── use-toast.ts       # (shadcn)
     ├── lib/
-    │   ├── api.ts             # API client + VITE_API_URL + Bearer auth
+    │   ├── api.ts             # API client + VITE_API_URL + getProduct(id) + Bearer auth
     │   ├── brand.ts           # Brand constants and contact details
     │   ├── collections.ts     # The five collections
+    │   ├── availability.ts    # Availability badge helpers
     │   ├── session.ts         # JWT storage, expiry, auth header
-    │   ├── whatsapp.ts        # Order-message builders
+    │   ├── whatsapp.ts        # Order-message builders + product page URL
     │   ├── productImages.ts   # imageURLs normalisation
     │   └── utils.ts           # cn() helper
+    ├── layouts/
+    │   └── AdminLayout.tsx    # Guarded admin shell: sidebar, topbar, session-expiry handling
     ├── pages/
-    │   └── AdminPage.tsx      # Bootstrap → login/register → dashboard
+    │   ├── HomePage.tsx  ShopPage.tsx  CollectionsPage.tsx
+    │   ├── AboutPage.tsx  ContactPage.tsx  ProductDetailsPage.tsx  NotFoundPage.tsx
+    │   └── admin/
+    │       ├── AdminLoginPage.tsx      AdminRegisterPage.tsx
+    │       ├── AdminDashboardPage.tsx  AdminProductsPage.tsx
+    │       ├── AdminAddProductPage.tsx AdminEditProductPage.tsx
+    │       └── AdminSettingsPage.tsx   AdminChangePasswordPage.tsx
     └── components/
-        ├── Section.tsx        # Container / Section layout primitives
+        ├── Section.tsx  ScrollToTop.tsx  PublicLayout.tsx
         ├── Navigation.tsx     Footer.tsx
-        ├── ProductCard.tsx    ProductModal.tsx
+        ├── ProductCard.tsx    ProductDetailView.tsx
         ├── WhatsAppButton.tsx WhatsAppOrderButton.tsx
         ├── admin/
-        │   ├── AdminDashboard.tsx    AdminSidebar.tsx
+        │   ├── AdminSidebar.tsx
         │   ├── AdminProductForm.tsx
         │   ├── InventorySummary.tsx  ProductTable.tsx  ChangePasswordForm.tsx
-        └── sections/
-            ├── Hero.tsx  Categories.tsx  Collections.tsx  Shop.tsx
-            ├── BrandStory.tsx  WhyShop.tsx  HowItWorks.tsx
-            ├── Testimonials.tsx  FAQ.tsx  Contact.tsx
+        ├── sections/
+        │   ├── Hero.tsx  Categories.tsx  Collections.tsx  Shop.tsx
+        │   ├── BrandStory.tsx  WhyShop.tsx  HowItWorks.tsx
+        │   └── Testimonials.tsx  FAQ.tsx  Contact.tsx
         └── ui/               # shadcn/ui primitives (unused by the app)
 ```
 
@@ -165,12 +196,12 @@ Defined once in `src/index.css` using Tailwind v4's CSS-first `@theme` block.
 
 ## Backend API
 
-The frontend talks to a **separate** Express + MongoDB service. The base URL is read from `VITE_API_URL` in `src/lib/api.ts`, falling back to the live Render deployment.
+The frontend talks to a **separate** Express + MongoDB service. The base URL is `import.meta.env.VITE_API_URL`, falling back to the live Render deployment when unset:
 
 ```bash
 # .env.local  (git-ignored)
-# VITE_API_URL=http://localhost:4000
-# VITE_API_URL=http://localhost:4000   # for a local backend
+VITE_API_URL=http://localhost:4500   # for a local backend — use the PORT from the backend's .env
+# unset → https://rockyluxe-bd.onrender.com (live)
 ```
 
 > The Render service is still named `rockyluxe-bd`. That is infrastructure, not branding — if you rename the service, update `VITE_API_URL` and the fallback in `src/lib/api.ts`.
@@ -178,6 +209,7 @@ The frontend talks to a **separate** Express + MongoDB service. The base URL is 
 | Method | Endpoint | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/jewelry/getallproducts` | public | List products |
+| `GET` | `/jewelry/products/:id` | public | Single product by Mongo `_id` — 400 invalid id, 404 missing |
 | `POST` | `/jewelry/addproducts` | **Bearer** | Create product (multipart) |
 | `PUT` | `/jewelry/editproducts/:id` | **Bearer** | Update product (multipart) |
 | `DELETE` | `/jewelry/deleteproducts/:id` | **Bearer** | Delete product |
@@ -186,7 +218,7 @@ The frontend talks to a **separate** Express + MongoDB service. The base URL is 
 | `POST` | `/admin/register` | public | Creates the first admin only |
 | `PUT` | `/admin/changepassword` | **Bearer** | Change admin password |
 
-`src/lib/api.ts` attaches `Authorization: Bearer <token>` to every protected call automatically, using the token from `src/lib/session.ts`.
+`src/lib/api.ts` attaches `Authorization: Bearer <token>` to every protected call automatically, using the token from `src/lib/session.ts`. `getProduct(id)` validates the ObjectId client-side before calling, so a malformed URL short-circuits to the 404 state without hitting the API.
 
 ### Product shape
 
@@ -219,7 +251,7 @@ The backend reuses one field for two things historically. To avoid a breaking ch
 
 ## WhatsApp ordering
 
-Orders are placed over WhatsApp. `src/lib/whatsapp.ts` builds a prefilled message containing the brand, product name, chosen size and colour, price, the currently viewed image URL, and a product reference, then links to `https://wa.me/2348155589764`.
+Orders are placed over WhatsApp. `src/lib/whatsapp.ts` builds a prefilled message containing the brand, product name, chosen size and colour, price, the currently viewed image URL, a product reference (the Mongo `_id`), and — when the reference is an ObjectId — the canonical **product page URL** (`getProductUrl(id)`), then links to `https://wa.me/2348155589764`. Size and colour are only included for apparel products, so a perfume or jewellery order can never claim "Size: M".
 
 The number is defined once in `src/lib/brand.ts` as `WHATSAPP_NUMBER` in international format. The visible number (0815 558 9764) and the calling number (0902 979 4742, `tel:+2349029794742`) live alongside it.
 
@@ -269,7 +301,7 @@ Every build carries a marker in the served `index.html`:
 
 ```html
 <meta name="application-name" content="DAMI MERIDIAN" />
-<meta name="build-id" content="dm-2026-10-19-rebrand-1" />
+<meta name="build-id" content="dm-2026-10-20-routes-1" />
 ```
 
 Check which build is live:
@@ -278,7 +310,7 @@ Check which build is live:
 curl -s https://your-domain.example/ | grep -i 'build-id\|application-name'
 ```
 
-The output must contain `content="dm-2026-10-19-rebrand-1"`. If it contains the old `ROCKYLUXE` marker (or no marker at all), the deployment is serving an older build — check that `dist/` was rebuilt and redeployed, and that the build id in `index.html` was bumped.
+The output must contain `content="dm-2026-10-20-routes-1"`. If it contains an older marker (or no marker at all), the deployment is serving an older build — check that `dist/` was rebuilt and redeployed, and that the build id in `index.html` was bumped.
 
 **A hard refresh should no longer be needed.** The HTML entry point is served with `no-cache, no-store, must-revalidate, max-age=0`, so the browser revalidates and re-downloads the document on every normal load; it can never keep serving a cached document that points at an old bundle. The fingerprinted files under `/assets/` are served `immutable`, which is safe because their URLs change whenever the content changes.
 
@@ -294,6 +326,7 @@ The frontend and backend live in separate repositories. The following backend ch
 2. **`verifyToken` is now mounted** on `POST /jewelry/addproducts`, `PUT /jewelry/editproducts/:id`, `DELETE /jewelry/deleteproducts/:id` and `PUT /admin/changepassword`. Before this, **every write endpoint was open to anyone** — `DELETE` returned `{"message":"Product deleted"}` for a non-existent id with no token at all.
 3. **`Models/modelProduct.js`** gained the `collection`, `sizes`, `colors`, `fragranceNotes` and `volume` fields, all optional and backward compatible.
 4. **`Controllers/user.controllersproduct.js`** now returns `404` for a missing product on delete/edit instead of reporting success.
+5. **`GET /jewelry/products/:id` is new** (`getproductbyid`) — a public single-product lookup that powers `/products/:id`. It validates the ObjectId (400), returns 404 for a missing product, and responds with the bare product document. **This endpoint must be deployed for product detail pages and the "Product page:" line in WhatsApp messages to work.**
 
 > **Deployment order matters.** The backend now returns `401` on protected routes. Deploy the frontend (which sends the Bearer token) at the same time as, or before, the backend.
 
@@ -324,8 +357,10 @@ Production build (`npm run build`):
 
 | Asset | Raw | Gzipped |
 | --- | --- | --- |
-| `index.js` | 481 kB | 137 kB |
-| `index.css` | 153 kB | 23 kB |
+| `index.js` | 524.59 kB | 145.69 kB |
+| `index.css` | 155.49 kB | 23.54 kB |
 | Fonts | 8 woff2 subsets, self-hosted | — |
 
 Typecheck (`npm run typecheck`) is clean. `lucide-react` tree-shakes correctly, so unused icons are not shipped.
+
+> Vite warns that the single JS chunk exceeds 500 kB — admin + storefront + the (unused) shadcn/ui kit ship in one bundle. Lazy-loading the `/admin/*` group with `React.lazy` or a `manualChunks` rule would split it, left out to keep behavior boring and predictable.

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import { Section } from '@/components/Section'
 import { COLLECTIONS, type CollectionId } from '@/lib/collections'
@@ -80,23 +81,25 @@ const IMAGE_FALLBACKS: Record<string, string> = {
   '/images/collection-4.jpg': '/images/cat-perfumes.jpg',
 }
 
+/**
+ * Each tile is a real link into the routed shop: `/shop?collection=<id>`
+ * pre-filters the grid there, so navigation replaces the old
+ * window-event dispatch + in-page anchor scroll.
+ */
 function CollectionTile({
   tile,
   index,
   featured,
-  onSelect,
 }: {
   tile: Tile
   index: number
   featured: boolean
-  onSelect: (id: CollectionId) => void
 }) {
   const name = COLLECTION_BY_ID.get(tile.id)?.name ?? tile.id
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(tile.id)}
+    <Link
+      to={`/shop?collection=${tile.id}`}
       aria-label={`Browse ${name}`}
       style={{ animationDelay: `${index * 90}ms` }}
       className={`group relative block w-full animate-fade-in-up overflow-hidden rounded-2xl border border-border bg-surface text-left transition-all duration-500 hover:-translate-y-1 hover:border-primary/60 hover:shadow-2xl hover:shadow-primary/10 focus-visible:border-primary/60 ${tile.frame} ${tile.placement}`}
@@ -151,24 +154,11 @@ function CollectionTile({
           <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
         </span>
       </span>
-    </button>
+    </Link>
   )
 }
 
 export default function Collections() {
-  /**
-   * The shop grid listens for this event to filter down to a collection;
-   * dispatching it first means the filter is already applied when the
-   * smooth scroll lands on the grid.
-   */
-  const selectCollection = (id: CollectionId) => {
-    if (typeof window === 'undefined') return
-    window.dispatchEvent(
-      new CustomEvent('dm:collection', { detail: { collection: id } }),
-    )
-    document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   return (
     <Section
       id="collections"
@@ -195,7 +185,6 @@ export default function Collections() {
             tile={tile}
             index={index}
             featured={index === 0}
-            onSelect={selectCollection}
           />
         ))}
       </div>

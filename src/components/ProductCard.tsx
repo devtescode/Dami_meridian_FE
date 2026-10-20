@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { ImageOff, MessageCircle } from 'lucide-react'
 import WhatsAppOrderButton from '@/components/WhatsAppOrderButton'
 import { availabilityLabel, availabilityPillClass } from '@/lib/availability'
 import { formatNaira } from '@/lib/brand'
 import { getCollectionName } from '@/lib/collections'
 import { getPrimaryImage, toImageArray } from '@/lib/productImages'
+import { getProductUrl } from '@/lib/whatsapp'
 import type { Product } from '@/types/product'
 
 /**
@@ -36,6 +38,9 @@ export default function ProductCard({
   const extraImages = images.length - 1
 
   const collectionName = getCollectionName(product.collection)
+  // A dead URL from the media host falls back to the branded placeholder
+  // below, never the browser's broken-image glyph.
+  const [failedImage, setFailedImage] = useState<string | null>(null)
   const availability = product.category ? product.category.trim() : ''
   const pill = availability
     ? {
@@ -49,17 +54,13 @@ export default function ProductCard({
   return (
     <article className="card-luxury card-luxury-hover group flex h-full flex-col overflow-hidden rounded-2xl">
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-surface-2">
-        {primaryImage ? (
+        {primaryImage && failedImage !== primaryImage ? (
           <img
             src={primaryImage}
             alt={product.name}
             loading="lazy"
             decoding="async"
-            onError={(event) => {
-              // A dead URL from the media host must not leave the browser's
-              // broken-image glyph inside the frame.
-              event.currentTarget.style.display = 'none'
-            }}
+            onError={() => setFailedImage(primaryImage)}
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
           />
         ) : (
@@ -126,6 +127,9 @@ export default function ProductCard({
               reference:
                 product._id ??
                 (product.id !== undefined ? String(product.id) : product.name),
+              // Link the message straight back to `/products/:id` whenever the
+              // record carries a real MongoDB reference.
+              ...(product._id ? { productUrl: getProductUrl(product._id) } : {}),
             }}
             // emerald-700 keeps the WhatsApp green but puts white at 5.36:1 on
             // the button, which the 12px label needs. The hover state is

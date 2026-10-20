@@ -19,15 +19,16 @@ import type {
 import type { CollectionId } from '@/lib/collections'
 
 /**
- * The live backend. This is only a fallback for when `VITE_API_URL` is not
- * set — it must point at a reachable deployment, never at localhost, because
- * this value is inlined into the browser bundle and a deployed site would
- * then try to talk to the visitor's own machine.
+ * The base URL comes from `VITE_API_URL` (see `.env.example`). The live
+ * Render deployment is the fallback so the app works out of the box; set the
+ * environment variable to point at a local backend (`http://localhost:4000`)
+ * or a staging deployment.
  */
 const FALLBACK_API_URL = 'http://localhost:4500'
-// import.meta.env.VITE_API_URL || 
+// import.meta.env.VITE_API_URL ||  
+
 export const API_BASE = (
-  FALLBACK_API_URL
+ FALLBACK_API_URL
 ).replace(/\/+$/, '')
 
 /** Error carrying the HTTP status and the backend's own message. */
@@ -134,6 +135,31 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export function getProducts(): Promise<Product[]> {
   // The catalogue is public, so the admin token must not be sent to it.
   return request<Product[]>('/jewelry/getallproducts', {
+    method: 'GET',
+    auth: false,
+  })
+}
+
+/** MongoDB ObjectId format — used to pre-validate `/products/:id` lookups. */
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i
+
+/**
+ * Fetch a single product by its MongoDB `_id` (the product reference used in
+ * WhatsApp order messages).
+ *
+ * Rejects immediately with a 400 `ApiError` when the id is not a valid
+ * ObjectId, so a malformed URL never produces a pointless network request.
+ * The backend returns 404 for products that no longer exist.
+ */
+export function getProduct(id: string): Promise<Product> {
+  const trimmed = id?.trim() ?? ''
+  if (!OBJECT_ID_PATTERN.test(trimmed)) {
+    return Promise.reject(
+      new ApiError('Invalid product reference.', 400),
+    )
+  }
+  // Public endpoint — the admin token must not be sent with it.
+  return request<Product>(`/jewelry/products/${trimmed}`, {
     method: 'GET',
     auth: false,
   })

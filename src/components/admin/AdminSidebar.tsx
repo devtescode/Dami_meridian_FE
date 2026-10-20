@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import {
   KeyRound,
   LayoutDashboard,
   LogOut,
   Package,
+  Search,
   Settings,
   Store,
   X,
@@ -14,32 +15,47 @@ import {
 import { BRAND } from '@/lib/brand'
 import { cn } from '@/lib/utils'
 
-/**
- * The panels the admin panel can show. `settings` and `password` intentionally
- * resolve to the same panel — both nav entries stay functional.
- */
-export type AdminSection = 'dashboard' | 'products' | 'settings' | 'password'
-
 interface AdminSidebarProps {
-  active: AdminSection
-  onSelect: (section: AdminSection) => void
-  onLogout: () => void
   /** Drives the off-canvas drawer below the `lg` breakpoint. */
   isOpen: boolean
   onClose: () => void
+  onLogout: () => void
 }
 
 interface NavItem {
-  id: AdminSection
+  /** Absolute route path the item points at. */
+  to: string
   label: string
   icon: LucideIcon
+  /**
+   * Match nested paths too, so `/admin/products/new` and
+   * `/admin/products/:id/edit` keep "Products" highlighted.
+   */
+  prefix?: boolean
+  /**
+   * Exact paths a prefix match must still treat as inactive — the lookup
+   * page lives under `/admin/products` but belongs to its own nav entry,
+   * so only one of the two may highlight there.
+   */
+  exclude?: string[]
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'products', label: 'Products', icon: Package },
-  { id: 'settings', label: 'Settings', icon: Settings },
-  { id: 'password', label: 'Change Password', icon: KeyRound },
+  { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  {
+    to: '/admin/products',
+    label: 'Products',
+    icon: Package,
+    prefix: true,
+    exclude: ['/admin/products/lookup'],
+  },
+  {
+    to: '/admin/products/lookup',
+    label: 'Product Lookup',
+    icon: Search,
+  },
+  { to: '/admin/settings', label: 'Settings', icon: Settings },
+  { to: '/admin/change-password', label: 'Change Password', icon: KeyRound },
 ]
 
 /** Tailwind's `lg` breakpoint — used to decide drawer vs. permanent sidebar. */
@@ -67,11 +83,9 @@ function getFocusableElements(root: HTMLElement): HTMLElement[] {
 }
 
 export default function AdminSidebar({
-  active,
-  onSelect,
-  onLogout,
   isOpen,
   onClose,
+  onLogout,
 }: AdminSidebarProps) {
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window === 'undefined'
@@ -82,6 +96,7 @@ export default function AdminSidebar({
   const panelRef = useRef<HTMLElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
   const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const { pathname } = useLocation()
 
   /**
    * Below `lg` the sidebar is an off-canvas drawer that behaves modally.
@@ -147,7 +162,7 @@ export default function AdminSidebar({
 
   /**
    * Remember who opened the drawer so focus can be handed back on close —
-   * Escape, the backdrop, the close button and the nav items all close it.
+   * Escape, the backdrop, the close button and the nav links all close it.
    */
   useEffect(() => {
     if (!isOpen) return
@@ -214,12 +229,6 @@ export default function AdminSidebar({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, isDesktop, onClose])
 
-  const handleSelect = (section: AdminSection) => {
-    onSelect(section)
-    // Selecting from the drawer should always dismiss it.
-    onClose()
-  }
-
   return (
     <>
       {/* Backdrop — only meaningful while the drawer is open on small screens. */}
@@ -284,24 +293,34 @@ export default function AdminSidebar({
           <ul className="space-y-1">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon
-              const isActive = active === item.id
 
               return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(item.id)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={cn(
-                      'flex min-h-[44px] w-full items-center gap-3 rounded-r-md border-l-2 px-4 py-2.5 text-left text-sm font-medium tracking-[0.06em] transition-colors duration-300',
-                      isActive
-                        ? 'border-l-primary bg-primary/10 text-primary'
-                        : 'border-l-transparent text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-                    )}
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    // Without `end`, nested routes stay highlighted (Products).
+                    end={!item.prefix}
+                    // Selecting from the drawer always dismisses it.
+                    onClick={onClose}
+                    className={({ isActive }) => {
+                      // A prefix match may still be vetoed per item, so the
+                      // lookup page highlights only its own nav entry.
+                      const active =
+                        isActive && !(item.exclude?.includes(pathname) ?? false)
+                      return cn(
+                        'flex min-h-[44px] w-full items-center gap-3 rounded-r-md border-l-2 px-4 py-2.5 text-left text-sm font-medium tracking-[0.06em] transition-colors duration-300',
+                        active
+                          ? 'border-l-primary bg-primary/10 text-primary'
+                          : 'border-l-transparent text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+                      )
+                    }}
                   >
-                    <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                    <Icon
+                      className="h-[18px] w-[18px] shrink-0"
+                      aria-hidden="true"
+                    />
                     <span>{item.label}</span>
-                  </button>
+                  </NavLink>
                 </li>
               )
             })}
@@ -323,6 +342,7 @@ export default function AdminSidebar({
         <div className="border-t border-border p-3">
           <Link
             to="/"
+            onClick={onClose}
             className="flex min-h-[44px] items-center gap-3 rounded-md px-4 py-2.5 text-sm tracking-[0.06em] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-primary"
           >
             <Store className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />

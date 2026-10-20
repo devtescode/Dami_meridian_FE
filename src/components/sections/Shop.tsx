@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
   ChevronDown,
@@ -11,7 +12,11 @@ import {
 import ProductCard from '@/components/ProductCard'
 import { Section } from '@/components/Section'
 import { useProducts } from '@/hooks/useProducts'
-import { COLLECTIONS, type CollectionId } from '@/lib/collections'
+import {
+  COLLECTIONS,
+  COLLECTION_IDS,
+  type CollectionId,
+} from '@/lib/collections'
 import type { Product } from '@/types/product'
 
 type FilterId = 'all' | CollectionId
@@ -37,6 +42,12 @@ function resolveCollection(product: Product): CollectionId {
   if (!id) return 'jewellery'
   const match = COLLECTIONS.find((collection) => collection.id === id)
   return match ? match.id : 'jewellery'
+}
+
+/** Reads `?collection=` into a known id, or null when absent/unknown. */
+function parseCollectionParam(raw: string | null): CollectionId | null {
+  if (!raw) return null
+  return COLLECTION_IDS.find((id) => id === raw) ?? null
 }
 
 /** Parses a price into a number, or null when it cannot be read. */
@@ -75,16 +86,34 @@ function ProductSkeleton() {
   )
 }
 
-export default function Shop({
-  onProductClick,
-}: {
-  onProductClick: (product: Product) => void
-}) {
-  const { products, isLoading, error, refetch } = useProducts()
+export interface ShopProps {
+  /** Optional override; defaults to navigating to `/products/:id`. */
+  onProductClick?: (product: Product) => void
+  /**
+   * Hides the section's own eyebrow/heading/description/gold-rule block when
+   * the host page already renders a page header (e.g. `/shop`), so the two
+   * headers never stack. Everything else — search, sort, chips, counts,
+   * skeletons, states, grid — renders unchanged.
+   */
+  hideHeader?: boolean
+}
 
-  const [activeFilter, setActiveFilter] = useState<FilterId>('all')
-  const [searchInput, setSearchInput] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
+export default function Shop({ onProductClick, hideHeader = false }: ShopProps) {
+  const { products, isLoading, error, refetch } = useProducts()
+  const navigate = useNavigate()
+
+  /** The URL is the source of truth for the collection and search filters. */
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const activeFilter: FilterId =
+    parseCollectionParam(searchParams.get('collection')) ?? 'all'
+
+  const [searchInput, setSearchInput] = useState(
+    () => searchParams.get('q') ?? '',
+  )
+  const [searchTerm, setSearchTerm] = useState(
+    () => (searchParams.get('q') ?? '').trim().toLowerCase(),
+  )
   const [sort, setSort] = useState<SortId>('featured')
 
   // Debounce the search so typing does not re-filter the grid on every keystroke.
@@ -95,54 +124,66 @@ export default function Shop({
     return () => window.clearTimeout(timer)
   }, [searchInput])
 
-  /**
-   * The categories section lives outside this component and announces the
-   * collection the visitor picked through window events.
-   */
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const applyCollection = (raw: string | null) => {
-      if (!raw) {
-        setActiveFilter('all')
-        return
-      }
-      const match = COLLECTIONS.find((collection) => collection.id === raw)
-      if (match) setActiveFilter(match.id)
-    }
-
-    const handleCollection = (event: Event) => {
-      const detail = (event as CustomEvent<{ collection?: string }>).detail
-      applyCollection(detail && detail.collection ? detail.collection : null)
-    }
-
-    const handleCollectionChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ collection?: string | null }>)
-        .detail
-      applyCollection(detail && detail.collection ? detail.collection : null)
-    }
-
-    window.addEventListener('dm:collection', handleCollection)
-    window.addEventListener('dm:collection:change', handleCollectionChange)
-
-    return () => {
-      window.removeEventListener('dm:collection', handleCollection)
-      window.removeEventListener('dm:collection:change', handleCollectionChange)
-    }
-  }, [])
+  const urlQuery = searchParams.get('q') ?? ''
 
   /**
-   * The shop owns the filter, so it publishes the active collection back to
-   * the categories section to keep both in sync.
+   * Adopt a `?q=` written from outside the input. The nav bar navigates to
+   * `/shop?q=…` even when this component is already mounted — the state
+   * initialisers above only run once — so without this the grid would keep
+   * filtering on the previous term while the URL advertised a new one. The
+   * equality guard stops the effect from undoing the visitor's own typing:
+   * the debounced write-back below always lands on exactly this value.
    */
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.dispatchEvent(
-      new CustomEvent('dm:collection:change', {
-        detail: { collection: activeFilter === 'all' ? null : activeFilter },
-      }),
+    if (searchInput.trim().toLowerCase() === urlQuery.trim().toLowerCase()) {
+      return
+    }
+    setSearchInput(urlQuery)
+    setSearchTerm(urlQuery.trim().toLowerCase())
+  }, [urlQuery])
+
+  /**
+   * Mirror the debounced term into `?q=` so filtered searches stay shareable.
+   * `replace` keeps keystrokes out of the history stack — Back still works
+   * between collections, which push their own entries.
+   */
+  useEffect(() => {
+    setSearchParams(
+      (previous) => {
+        if ((previous.get('q') ?? '').trim().toLowerCase() === searchTerm) {
+          return previous
+        }
+        const next = new URLSearchParams(previous)
+        if (searchTerm) next.set('q', searchTerm)
+        else next.delete('q')
+        return next
+      },
+      { replace: true },
     )
-  }, [activeFilter])
+  }, [searchTerm, setSearchParams])
+
+  /** Collection chips write `?collection=`, pushing a history entry each time. */
+  const selectCollection = (id: FilterId) => {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        if (id === 'all') next.delete('collection')
+        else next.set('collection', id)
+        return next
+      },
+      { replace: false },
+    )
+  }
+
+  const handleProductClick = (product: Product) => {
+    if (onProductClick) {
+      onProductClick(product)
+      return
+    }
+    const id = product._id ?? product.id
+    if (!id) return
+    navigate(`/products/${id}`)
+  }
 
   const hasNumericPrice = useMemo(
     () => products.some((product) => numericPrice(product) !== null),
@@ -195,7 +236,7 @@ export default function Shop({
     activeFilter !== 'all' || searchTerm.length > 0 || sort !== 'featured'
 
   const clearFilters = () => {
-    setActiveFilter('all')
+    setSearchParams({}, { replace: false })
     setSearchInput('')
     setSearchTerm('')
     setSort('featured')
@@ -210,13 +251,20 @@ export default function Shop({
   return (
     <Section
       id="shop"
-      eyebrow="The Collection"
-      title={
-        <>
-          Shop <span className="text-gradient">DAMI MERIDIAN</span>
-        </>
-      }
-      description="Premium t-shirts, joggers, fragrances and jewellery — every piece selected to carry identity. Filter the catalogue, find your fit, and order directly on WhatsApp."
+      // Omitting the header props skips the eyebrow/heading/rule block while
+      // the Section wrapper (vertical rhythm, Container) renders unchanged.
+      {...(hideHeader
+        ? {}
+        : {
+            eyebrow: 'The Collection',
+            title: (
+              <>
+                Shop <span className="text-gradient">DAMI MERIDIAN</span>
+              </>
+            ),
+            description:
+              'Premium t-shirts, joggers, fragrances and jewellery — every piece selected to carry identity. Filter the catalogue, find your fit, and order directly on WhatsApp.',
+          })}
     >
       <div className="mb-10 flex flex-col gap-5 lg:mb-12">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -230,8 +278,8 @@ export default function Shop({
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search t-shirts, perfumes, jewellery…"
-              aria-label="Search products"
-              className="w-full min-h-[44px] rounded-full border border-border bg-surface py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
+              aria-label="Search the catalogue"
+              className="w-full min-h-[44px] rounded-full border border-border bg-surface-2 py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
             />
           </div>
 
@@ -247,7 +295,7 @@ export default function Shop({
               id="shop-sort"
               value={sort}
               onChange={(event) => setSort(event.target.value as SortId)}
-              className="w-full min-h-[44px] appearance-none rounded-full border border-border bg-surface py-2 pl-4 pr-10 text-sm text-foreground transition-colors focus:border-primary/60 scheme-dark sm:w-auto"
+              className="w-full min-h-[44px] appearance-none rounded-full border border-border bg-surface-2 py-2 pl-4 pr-10 text-sm text-foreground transition-colors focus:border-primary/60 scheme-dark sm:w-auto"
             >
               <option value="featured">{SORT_LABELS.featured}</option>
               {hasNumericPrice && (
@@ -274,7 +322,7 @@ export default function Shop({
         >
           <button
             type="button"
-            onClick={() => setActiveFilter('all')}
+            onClick={() => selectCollection('all')}
             aria-pressed={activeFilter === 'all'}
             className={`${CHIP_BASE} ${
               activeFilter === 'all'
@@ -288,7 +336,7 @@ export default function Shop({
             <button
               key={collection.id}
               type="button"
-              onClick={() => setActiveFilter(collection.id)}
+              onClick={() => selectCollection(collection.id)}
               aria-pressed={activeFilter === collection.id}
               className={`${CHIP_BASE} ${
                 activeFilter === collection.id
@@ -389,7 +437,7 @@ export default function Shop({
             >
               <ProductCard
                 product={product}
-                onViewMore={() => onProductClick(product)}
+                onViewMore={() => handleProductClick(product)}
               />
             </div>
           ))}

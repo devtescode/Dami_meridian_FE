@@ -5,23 +5,35 @@
  * with a gold hairline once the page scrolls. Everything below the lg
  * breakpoint collapses into a slide-in drawer so the header never wraps or
  * overflows on a 320px screen.
+ *
+ * Every destination is a real router <Link>; the current route is picked out
+ * in gold with `aria-current="page"`, and the search field routes straight to
+ * the shop with the term in the `q` query param.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { Instagram, Menu, MessageCircle, Music, Shield, X } from 'lucide-react'
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import {
+  Instagram,
+  Menu,
+  MessageCircle,
+  Music,
+  Search,
+  Shield,
+  X,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { BRAND, LINKS, SOCIALS } from '@/lib/brand'
 import { Container } from '@/components/Section'
 
-/** In-page destinations; the ids match the section anchors rendered by the page. */
+/** Top-level routes, rendered in both the desktop bar and the mobile drawer. */
 const NAV_LINKS = [
-  { label: 'Home', id: 'home' },
-  { label: 'Shop', id: 'shop' },
-  { label: 'Collections', id: 'collections' },
-  { label: 'About', id: 'about' },
-  { label: 'Contact', id: 'contact' },
+  { label: 'Home', to: '/' },
+  { label: 'Shop', to: '/shop' },
+  { label: 'Collections', to: '/collections' },
+  { label: 'About', to: '/about' },
+  { label: 'Contact', to: '/contact' },
 ] as const
 
 type SocialEntry = (typeof SOCIALS)[number]
@@ -34,17 +46,15 @@ const SOCIAL_ICONS: Record<SocialEntry['id'], LucideIcon> = {
 
 /** Focusable nodes used to keep Tab cycling inside the open drawer. */
 const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
- * A social handle. The brand has no verified profile URLs yet, so the handle
- * is rendered as plain text rather than a link to an invented URL.
- *
- * The platform name is injected as visually hidden text instead of an
- * `aria-label`: a <span> has an implicit `generic` role, and `aria-label` is
- * prohibited on `generic`, so the platform name would never reach a screen
- * reader. The visible label stays the handle, so the two handles never sound
- * identical out loud.
+ * Renders a handle as a link when the brand has a verified profile URL, and as
+ * plain text otherwise. The platform name is injected as visually hidden text
+ * instead of an `aria-label`: a <span> has an implicit `generic` role, and
+ * `aria-label` is prohibited on `generic`, so the platform name would never
+ * reach a screen reader. The visible label stays the handle, so the two handles
+ * never sound identical out loud.
  */
 function SocialHandle({
   social,
@@ -63,7 +73,7 @@ function SocialHandle({
     </>
   )
 
-  const base = `inline-flex items-center gap-1.5 text-xs uppercase text-muted-foreground/70 ${className}`
+  const base = `inline-flex min-h-[44px] items-center gap-1.5 text-xs uppercase text-muted-foreground ${className}`
 
   if (!social.url) {
     return (
@@ -89,9 +99,27 @@ function SocialHandle({
 export function Navigation() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const toggleRef = useRef<HTMLButtonElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  /**
+   * `/shop` is the query-param surface, so it also owns the Shop highlight on
+   * `/products/:id` — a product is reached from the catalogue. Nested paths
+   * (e.g. `/collections/x`) match on their first segment only.
+   */
+  const isActive = (to: string) => {
+    if (to === '/shop') {
+      return (
+        location.pathname === '/shop' ||
+        location.pathname.startsWith('/products')
+      )
+    }
+    return location.pathname === to
+  }
 
   // The frosted surface and the gold hairline only appear once the page moves.
   useEffect(() => {
@@ -150,31 +178,23 @@ export function Navigation() {
     setMenuOpen(false)
   }, [menuOpen])
 
-  const scrollToSection = useCallback(
-    (id: string) => {
-      // Honour the OS "reduce motion" preference when choosing the behaviour.
-      const behavior: ScrollBehavior = window.matchMedia(
-        '(prefers-reduced-motion: reduce)',
-      ).matches
-        ? 'auto'
-        : 'smooth'
+  /**
+   * Both the desktop bar and the drawer submit the same term, so one handler
+   * routes to the shop's `q` param (or a blank catalogue when cleared) and
+   * dismisses the drawer if it was the one in play.
+   */
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const term = searchTerm.trim()
+    navigate(term ? `/shop?q=${encodeURIComponent(term)}` : '/shop')
+    setSearchTerm('')
+    closeMenu()
+  }
 
-      if (id === 'home') {
-        window.scrollTo({ top: 0, behavior })
-        closeMenu()
-        return
-      }
-
-      const element = document.getElementById(id)
-      if (element) {
-        // Offset the target so the sticky bar never covers a section heading.
-        element.style.scrollMarginTop = '5rem'
-        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }
-      closeMenu()
-    },
-    [closeMenu],
-  )
+  // Any route change dismisses the drawer, whichever element caused it.
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname])
 
   const handlePanelKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab') return
@@ -208,15 +228,14 @@ export function Navigation() {
       >
         <Container className="flex h-16 items-center justify-between gap-3 sm:h-20">
           {/* Brand lockup */}
-          <button
-            type="button"
-            onClick={() => scrollToSection('home')}
-            aria-label={`${BRAND.name} — back to top`}
+          <Link
+            to="/"
+            aria-label={`${BRAND.name} — home`}
             className="flex min-w-0 shrink items-center gap-2.5 sm:gap-3"
           >
             <img
               src="/logo-mark.svg"
-              alt={`${BRAND.name} meridian mark`}
+              alt=""
               width={40}
               height={40}
               className="h-9 w-9 shrink-0 sm:h-10 sm:w-10"
@@ -224,25 +243,34 @@ export function Navigation() {
             <span className="min-w-0 truncate font-display text-base leading-none tracking-[0.25em] text-gradient sm:text-lg sm:tracking-[0.3em] lg:text-xl xl:text-2xl">
               {BRAND.name}
             </span>
-          </button>
+          </Link>
 
           {/* Desktop navigation */}
           <ul className="hidden flex-1 items-center justify-center gap-1 lg:flex">
-            {NAV_LINKS.map((link) => (
-              <li key={link.id}>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection(link.id)}
-                  className="group relative inline-flex min-h-[2.75rem] items-center px-2 text-xs uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {link.label}
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-2 bottom-2 h-px origin-left scale-x-0 bg-primary/70 transition-transform duration-300 group-hover:scale-x-100"
-                  />
-                </button>
-              </li>
-            ))}
+            {NAV_LINKS.map((link) => {
+              const active = isActive(link.to)
+              return (
+                <li key={link.to}>
+                  <Link
+                    to={link.to}
+                    aria-current={active ? 'page' : undefined}
+                    className={`group relative inline-flex min-h-[2.75rem] items-center px-2 text-xs uppercase tracking-widest transition-colors hover:text-foreground ${
+                      active ? 'text-primary' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {link.label}
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute inset-x-2 bottom-2 h-px origin-left bg-primary/70 transition-transform duration-300 ${
+                        active
+                          ? 'scale-x-100'
+                          : 'scale-x-0 group-hover:scale-x-100'
+                      }`}
+                    />
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
 
           {/* Secondary links and CTA */}
@@ -254,13 +282,37 @@ export function Navigation() {
               ))}
             </div> */}
 
-            <Link
+            {/* <Link
               to="/admin"
               className="hidden min-h-[2.75rem] items-center gap-1.5 rounded-full border border-border px-3 text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary md:inline-flex"
             >
               <Shield className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
               Admin
-            </Link>
+            </Link> */}
+
+            {/* Compact site search — submits to the shop's `q` param. Below lg
+                the same field lives inside the drawer instead. */}
+            <form
+              role="search"
+              onSubmit={handleSearchSubmit}
+              className="relative hidden w-36 lg:block xl:w-48"
+            >
+              <label htmlFor="nav-search-desktop" className="sr-only">
+                Search products
+              </label>
+              <Search
+                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                id="nav-search-desktop"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search…"
+                className="min-h-[2.75rem] w-full rounded-full border border-border bg-surface-2 py-2 pl-10 pr-4 text-xs text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
+              />
+            </form>
 
             <a
               href={LINKS.whatsapp}
@@ -346,22 +398,51 @@ export function Navigation() {
           </div>
 
           <div className="scrollbar-slim flex-1 overflow-y-auto px-4 py-5">
+            {/* The desktop search field, sized for thumbs. */}
+            <form
+              role="search"
+              onSubmit={handleSearchSubmit}
+              className="relative mb-5"
+            >
+              <label htmlFor="nav-search-drawer" className="sr-only">
+                Search products
+              </label>
+              <Search
+                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <input
+                id="nav-search-drawer"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search products…"
+                className="min-h-[2.75rem] w-full rounded-full border border-border bg-surface-2 py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
+              />
+            </form>
+
             <ul className="flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
-                <li key={link.id}>
-                  <button
-                    type="button"
-                    onClick={() => scrollToSection(link.id)}
-                    className="flex min-h-[3rem] w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left font-display text-2xl text-foreground/90 transition-colors hover:bg-primary/10 hover:text-primary"
-                  >
-                    {link.label}
-                    <span
-                      aria-hidden="true"
-                      className="h-px w-8 shrink-0 bg-primary/40"
-                    />
-                  </button>
-                </li>
-              ))}
+              {NAV_LINKS.map((link) => {
+                const active = isActive(link.to)
+                return (
+                  <li key={link.to}>
+                    <Link
+                      to={link.to}
+                      onClick={closeMenu}
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex min-h-[3rem] w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left font-display text-2xl transition-colors hover:bg-primary/10 hover:text-primary ${
+                        active ? 'text-primary' : 'text-foreground/90'
+                      }`}
+                    >
+                      {link.label}
+                      <span
+                        aria-hidden="true"
+                        className="h-px w-8 shrink-0 bg-primary/40"
+                      />
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           </div>
 

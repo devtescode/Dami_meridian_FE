@@ -41,10 +41,13 @@ export default function BrandStory() {
               />
             </figure>
 
-            <figcaption className="mt-5 flex items-start gap-2 text-sm text-muted-foreground">
+            {/* A <figcaption> must be a child of its <figure>, and the frame
+                above is aspect-locked and overflow-hidden — so the caption
+                stays a plain paragraph directly beneath it. */}
+            <p className="mt-5 flex items-start gap-2 text-sm text-muted-foreground">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <span>{BRAND.shortLocation}</span>
-            </figcaption>
+            </p>
           </div>
 
           {/* ---- Copy ---- */}

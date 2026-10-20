@@ -3,10 +3,10 @@ import { ImageOff, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react
 
 import { formatNaira } from '@/lib/brand'
 import { COLLECTIONS, getCollectionName, resolveCollectionId } from '@/lib/collections'
-import { availabilityLabel, availabilityPillClass, resolveAvailabilityKey } from '@/lib/availability'
+import { availabilityLabel, availabilityPillClass } from '@/lib/availability'
 import { toImageArray } from '@/lib/productImages'
 import { cn } from '@/lib/utils'
-import { AVAILABILITIES, type Product } from '@/types/product'
+import type { Product } from '@/types/product'
 
 interface ProductTableProps {
   products: Product[]
@@ -21,20 +21,6 @@ const SEARCH_DEBOUNCE_MS = 200
 /** Maximum number of thumbnails shown before the "+N" overflow chip. */
 const MAX_THUMBS = 3
 
-/**
- * Availability pill colours. The strings are written out in full so Tailwind's
- * scanner can see every class — a template literal would be dropped.
- */
-const AVAILABILITY_PILL_CLASS: Record<string, string> = {
-  'In Stock': 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  'Out of Stock': 'border-destructive/40 bg-destructive/10 text-destructive',
-  'Made to Order': 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  'Coming Soon': 'border-border bg-surface-2 text-muted-foreground',
-}
-
-/** Fallback for products whose category is empty or unrecognised. */
-const NEUTRAL_PILL_CLASS = 'border-border bg-surface-2 text-muted-foreground'
-
 /** Thumbnail box sizes, held as literal class strings. */
 const THUMB_BOX_CLASS: Record<'sm' | 'lg', string> = {
   sm: 'h-10 w-10',
@@ -47,12 +33,6 @@ const THUMB_BOX_CLASS: Record<'sm' | 'lg', string> = {
  */
 function resolveCollection(product: Product): string {
   return resolveCollectionId(product)
-}
-
-/** Normalises a raw category onto a known availability label, if possible. */
-function resolveAvailability(category?: string): string | null {
-  return resolveAvailabilityKey(category) ??
-    (category?.trim() ? category.trim() : null)
 }
 
 function productKey(product: Product, index: number): string {

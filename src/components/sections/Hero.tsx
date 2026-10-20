@@ -1,5 +1,6 @@
 import { ArrowRight, Gem, Heart, MessageCircle, ShieldCheck, Truck } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Container } from '@/components/Section'
 import { BRAND } from '@/lib/brand'
 import { getGeneralWhatsAppLink } from '@/lib/whatsapp'
@@ -16,10 +17,6 @@ const TRUST_POINTS: { icon: LucideIcon; label: string }[] = [
 ]
 
 export default function Hero() {
-  const scrollToCollections = () => {
-    document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   return (
     <section
       id="home"
@@ -70,14 +67,13 @@ export default function Hero() {
             </p>
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={scrollToCollections}
+              <Link
+                to="/collections"
                 className="btn-gold btn-gold-hover inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-8 text-sm font-medium tracking-[0.06em] sm:text-base"
               >
                 Explore Collections
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </button>
+              </Link>
 
               <a
                 href={getGeneralWhatsAppLink()}

@@ -4,6 +4,24 @@ import type { Product } from '@/types/product'
 
 export { WHATSAPP_NUMBER }
 
+/** MongoDB ObjectId format — product references are Mongo `_id` values. */
+const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i
+
+/** True when `value` is a MongoDB ObjectId (a real product reference). */
+function isObjectId(value: string | undefined | null): value is string {
+  return typeof value === 'string' && OBJECT_ID_PATTERN.test(value.trim())
+}
+
+/**
+ * The public URL of a product's detail page. Relative references (ids) are
+ * resolved against the current origin so the link works from any route.
+ */
+export function getProductUrl(id: string): string {
+  const origin =
+    typeof window !== 'undefined' ? window.location.origin : ''
+  return `${origin}/products/${id.trim()}`
+}
+
 export type OrderProduct = Pick<
   Product,
   'name' | 'price' | 'imageURLs'
@@ -24,6 +42,12 @@ export interface ProductOrderOptions {
   color?: string
   /** Extra reference (e.g. product id) appended to the message. */
   reference?: string
+  /**
+   * Absolute URL of the product's page (`/products/:id`). When omitted but a
+   * `reference` that looks like a MongoDB ObjectId is supplied, the link is
+   * derived automatically so every order message carries a product URL.
+   */
+  productUrl?: string
 }
 
 /**
@@ -61,6 +85,16 @@ export function buildProductOrderText(
 
   if (options?.reference) {
     message += `\nReference: ${options.reference}`
+  }
+
+  // Every order message carries a link back to the product's own page, so
+  // the store can open the exact record behind the reference.
+  const reference = options?.reference
+  const productUrl =
+    options?.productUrl ??
+    (isObjectId(reference) ? getProductUrl(reference) : undefined)
+  if (productUrl) {
+    message += `\nProduct page: ${productUrl}`
   }
 
   const imageUrl = options?.imageUrl ?? getPrimaryImage(product.imageURLs)

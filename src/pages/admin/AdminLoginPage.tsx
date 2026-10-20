@@ -1,10 +1,13 @@
 /**
- * Admin authentication screen.
+ * Admin sign-in screen (public route).
  *
- * The bootstrap order is deliberate and mirrors the original screen:
- *   1. ask the backend whether an admin account exists,
- *   2. show the registration form when it does not, the login form when it does,
- *   3. render the dashboard only once a valid session exists.
+ * Bootstrap order mirrors the original monolith it was extracted from:
+ *   1. ask the backend whether an admin account exists (`/admin/status`),
+ *   2. show the login form when it does, a clear "no admin yet" call to
+ *      action when it does not (registration is only offered when the
+ *      status allows it),
+ *   3. hand off to `/admin/dashboard` — behind AdminLayout's guard — once
+ *      `setSession()` has stored the fresh JWT.
  *
  * Every request goes through `@/lib/api` so the base URL lives in one place,
  * and the JWT is stored through `@/lib/session` so the token and the auth flag
@@ -13,21 +16,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react'
 
-import AdminDashboard from '@/components/admin/AdminDashboard'
-import {
-  ApiError,
-  UNAUTHORIZED_EVENT,
-  adminLogin,
-  adminRegister,
-  getAdminStatus,
-} from '@/lib/api'
+import { usePageTitle } from '@/hooks/usePageTitle'
+import { ApiError, UNAUTHORIZED_EVENT, adminLogin, getAdminStatus } from '@/lib/api'
 import { BRAND } from '@/lib/brand'
-import { clearSession, isSessionValid, setSession } from '@/lib/session'
-
-type AuthView = 'login' | 'register'
+import { isSessionValid, setSession } from '@/lib/session'
 
 /** Friendlier copy than the raw transport failure for an unreachable API. */
 const NETWORK_ERROR =
@@ -111,13 +106,15 @@ function AuthCard({
 function BootScreen() {
   return (
     <AuthShell>
-      <div className="animate-fade-in flex w-full flex-col items-center gap-4 rounded-2xl bg-surface p-10 gold-hairline">
-        <Loader2
-          size={26}
-          className="animate-spin text-primary"
-          aria-hidden="true"
-        />
-        <p className="text-sm text-muted-foreground">Verifying admin access…</p>
+      <div className="animate-fade-in w-full rounded-2xl bg-surface p-10 gold-hairline">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2
+            size={26}
+            className="animate-spin text-primary"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-muted-foreground">Verifying admin access…</p>
+        </div>
       </div>
     </AuthShell>
   )
@@ -183,6 +180,7 @@ interface PasswordFieldProps {
   value: string
   onChange: (value: string) => void
   disabled: boolean
+  hint?: string
 }
 
 function PasswordField({
@@ -194,6 +192,7 @@ function PasswordField({
   value,
   onChange,
   disabled,
+  hint,
 }: PasswordFieldProps) {
   const [isVisible, setIsVisible] = useState(false)
 
@@ -233,12 +232,13 @@ function PasswordField({
           )}
         </button>
       </div>
+      {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
     </div>
   )
 }
 
 /* -------------------------------------------------------------------------- */
-/* Forms                                                                       */
+/* Form                                                                        */
 /* -------------------------------------------------------------------------- */
 
 interface LoginFormProps {
@@ -312,7 +312,7 @@ function LoginForm({ notice, onAuthenticated }: LoginFormProps) {
           // destructive-text is the lighter red: on the destructive/10 panel
           // over the card surface it holds 4.83:1, where plain destructive
           // (#ef4444) drops to 4.47:1.
-          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-text"
+          className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-text"
         >
           {error}
         </p>
@@ -321,7 +321,7 @@ function LoginForm({ notice, onAuthenticated }: LoginFormProps) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="btn-gold btn-gold-hover flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-medium uppercase tracking-widest text-primary-foreground disabled:cursor-not-allowed disabled:opacity-70"
+        className="mt-7 btn-gold btn-gold-hover flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-medium uppercase tracking-widest text-primary-foreground disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isSubmitting && (
           <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -332,134 +332,48 @@ function LoginForm({ notice, onAuthenticated }: LoginFormProps) {
   )
 }
 
-interface RegisterFormProps {
-  onRegistered: (message: string) => void
-}
-
-function RegisterForm({ onRegistered }: RegisterFormProps) {
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (isSubmitting) return
-
-    setError(null)
-    setIsSubmitting(true)
-
-    try {
-      const data = await adminRegister(fullName.trim(), email.trim(), password)
-      onRegistered(
-        data.message || 'Account created. Sign in with your new credentials.',
-      )
-    } catch (err) {
-      setError(describeError(err, 'Unable to create the admin account.'))
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} aria-busy={isSubmitting} className="space-y-5">
-      <fieldset disabled={isSubmitting} className="m-0 space-y-5 border-0 p-0">
-        <TextField
-          id="admin-name"
-          name="fullName"
-          label="Full name"
-          autoComplete="name"
-          placeholder="Your full name"
-          value={fullName}
-          onChange={setFullName}
-          disabled={isSubmitting}
-        />
-        <TextField
-          id="admin-email"
-          name="email"
-          label="Email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@damimeridian.com"
-          value={email}
-          onChange={setEmail}
-          disabled={isSubmitting}
-        />
-        <PasswordField
-          id="admin-password"
-          name="password"
-          label="Password"
-          autoComplete="new-password"
-          placeholder="Create a password"
-          value={password}
-          onChange={setPassword}
-          disabled={isSubmitting}
-        />
-      </fieldset>
-
-      {error && (
-        <p
-          role="alert"
-          aria-live="assertive"
-          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-text mt-4"
-        >
-          {error}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="btn-gold btn-gold-hover flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-medium uppercase tracking-widest text-primary-foreground disabled:cursor-not-allowed disabled:opacity-70 mt-7"
-      >
-        {isSubmitting && (
-          <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-        )}
-        {isSubmitting ? 'Creating account…' : 'Create Account'}
-      </button>
-    </form>
-  )
-}
-
 /* -------------------------------------------------------------------------- */
 /* Page                                                                        */
 /* -------------------------------------------------------------------------- */
 
-export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+/** `location.state` contract shared with the register page. */
+interface LoginLocationState {
+  notice?: string | null
+}
+
+export default function AdminLoginPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  usePageTitle('Admin Login')
+
   const [adminExists, setAdminExists] = useState<boolean | null>(null)
-  const [view, setView] = useState<AuthView>('login')
-  const [notice, setNotice] = useState<string | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [isBooting, setIsBooting] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [notice, setNotice] = useState<string | null>(
+    () => (location.state as LoginLocationState | null)?.notice ?? null,
+  )
 
   const checkStatus = useCallback(async (): Promise<void> => {
     setStatusError(null)
     try {
       const status = await getAdminStatus()
       setAdminExists(status.adminExists)
-      setView(status.adminExists ? 'login' : 'register')
     } catch (error) {
-      // The admin may still exist server-side, so fall back to the login form.
-      setStatusError(
-        describeError(error, 'Could not verify the admin account.'),
-      )
-      setView('login')
+      // The admin may still exist server-side, so keep the login form usable.
+      setStatusError(describeError(error, 'Could not verify the admin account.'))
     }
   }, [])
 
   useEffect(() => {
+    // A live session means the admin is already signed in — skip the lookup,
+    // the Navigate below is about to take over.
+    if (isSessionValid()) return
+
     let active = true
-
-    // A live session means the admin is already signed in — skip the form.
-    if (isSessionValid()) setIsAuthenticated(true)
-
     void checkStatus().finally(() => {
       if (active) setIsBooting(false)
     })
-
     return () => {
       active = false
     }
@@ -467,12 +381,10 @@ export default function AdminPage() {
 
   // The API client signals an expired or rejected session. The token has
   // already been cleared at that point, so drop straight back to the login
-  // form instead of leaving the admin on a dashboard that cannot save.
+  // prompt instead of leaving the admin staring at a stale form.
   useEffect(() => {
     const handleUnauthorized = () => {
-      setIsAuthenticated(false)
       setNotice('Your session expired. Please sign in again.')
-      setView('login')
     }
 
     window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
@@ -480,21 +392,15 @@ export default function AdminPage() {
       window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
   }, [])
 
+  // Registration hands its success message over through router state.
+  useEffect(() => {
+    const state = location.state as LoginLocationState | null
+    setNotice(state?.notice ?? null)
+  }, [location.state])
+
   const handleAuthenticated = (token: string) => {
     setSession(token)
-    setIsAuthenticated(true)
-  }
-
-  const handleRegistered = (message: string) => {
-    // An admin now exists, so registration closes and only login remains.
-    setAdminExists(true)
-    setNotice(message)
-    setView('login')
-  }
-
-  const handleLogout = () => {
-    clearSession()
-    setIsAuthenticated(false)
+    navigate('/admin/dashboard', { replace: true })
   }
 
   const handleRetryStatus = () => {
@@ -502,8 +408,9 @@ export default function AdminPage() {
     void checkStatus().finally(() => setIsRefreshing(false))
   }
 
-  if (isAuthenticated) {
-    return <AdminDashboard onLogout={handleLogout} />
+  // Already signed in → straight to the protected dashboard.
+  if (isSessionValid()) {
+    return <Navigate to="/admin/dashboard" replace />
   }
 
   if (isBooting) {
@@ -515,12 +422,8 @@ export default function AdminPage() {
   return (
     <AuthShell>
       <AuthCard
-        title={view === 'register' ? 'Create Admin Account' : 'Admin Login'}
-        subtitle={
-          view === 'register'
-            ? 'Set up the first administrator for the store.'
-            : 'Sign in to manage products, orders and settings'
-        }
+        title="Admin Login"
+        subtitle="Sign in to manage products and settings"
       >
         {statusError && (
           <div
@@ -542,30 +445,22 @@ export default function AdminPage() {
           </div>
         )}
 
-        {view === 'register' ? (
-          <RegisterForm onRegistered={handleRegistered} />
+        {registrationAvailable ? (
+          <div className="rounded-xl border border-primary/30 bg-primary/10 p-6 text-center">
+            <p className="eyebrow text-primary">No admin yet</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              No administrator account exists for this store. Create the first
+              admin account to start managing products and settings.
+            </p>
+            <Link
+              to="/admin/register"
+              className="btn-gold btn-gold-hover mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium uppercase tracking-widest text-primary-foreground"
+            >
+              Create the first admin account
+            </Link>
+          </div>
         ) : (
           <LoginForm notice={notice} onAuthenticated={handleAuthenticated} />
-        )}
-
-        {registrationAvailable && (
-          <div className="mt-6 border-t border-border pt-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              {view === 'register'
-                ? 'Already have an account?'
-                : 'Setting up the store for the first time?'}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setNotice(null)
-                setView(view === 'register' ? 'login' : 'register')
-              }}
-              className="btn-outline-gold btn-outline-gold-hover mt-3 inline-flex min-h-11 items-center justify-center rounded-lg px-5 py-2.5 text-center text-xs font-medium uppercase tracking-widest mt-5"
-            >
-              {view === 'register' ? 'Sign in instead' : 'Create admin account'}
-            </button>
-          </div>
         )}
       </AuthCard>
     </AuthShell>

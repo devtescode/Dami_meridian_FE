@@ -1,17 +1,18 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Instagram, MapPin, MessageCircle, Phone } from 'lucide-react'
 import { FaTiktok } from 'react-icons/fa'
 import { BRAND, CONTACT, LINKS, SOCIALS } from '@/lib/brand'
 import { COLLECTIONS } from '@/lib/collections'
 import { Container } from '@/components/Section'
 
-/** Same-page section anchors — plain anchors keep the footer router-agnostic. */
+/** Top-level routes — mirrors the primary navigation as router links. */
 const NAV_LINKS = [
-  { label: 'Home', href: '#home' },
-  { label: 'Shop', href: '#shop' },
-  { label: 'Collections', href: '#collections' },
-  { label: 'About', href: '#about' },
-  { label: 'Contact', href: '#contact' },
+  { label: 'Home', to: '/' },
+  { label: 'Shop', to: '/shop' },
+  { label: 'Collections', to: '/collections' },
+  { label: 'About', to: '/about' },
+  { label: 'Contact', to: '/contact' },
 ] as const
 
 type SocialId = (typeof SOCIALS)[number]['id']
@@ -84,9 +85,9 @@ export default function Footer() {
             <ColumnHeading>Explore</ColumnHeading>
             <ul className="mt-5 space-y-1">
               {NAV_LINKS.map((link) => (
-                <li key={link.href}>
-                  <a
-                    href={link.href}
+                <li key={link.to}>
+                  <Link
+                    to={link.to}
                     className="group inline-flex min-h-[44px] items-center gap-3 text-sm text-muted-foreground transition-colors hover:text-primary"
                   >
                     <span
@@ -94,7 +95,7 @@ export default function Footer() {
                       className="h-px w-4 bg-border transition-all duration-300 group-hover:w-6 group-hover:bg-primary"
                     />
                     {link.label}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -106,8 +107,8 @@ export default function Footer() {
             <ul className="mt-5 space-y-1">
               {COLLECTIONS.map((collection) => (
                 <li key={collection.id}>
-                  <a
-                    href="#shop"
+                  <Link
+                    to={`/shop?collection=${collection.id}`}
                     className="group inline-flex min-h-[44px] items-center gap-3 text-sm text-muted-foreground transition-colors hover:text-primary"
                   >
                     <span
@@ -115,7 +116,7 @@ export default function Footer() {
                       className="h-px w-4 bg-border transition-all duration-300 group-hover:w-6 group-hover:bg-primary"
                     />
                     {collection.name}
-                  </a>
+                  </Link>
                 </li>
               ))}
             </ul>
