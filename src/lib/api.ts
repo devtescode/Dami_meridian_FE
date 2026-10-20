@@ -25,10 +25,10 @@ import type { CollectionId } from '@/lib/collections'
  * or a staging deployment.
  */
 const FALLBACK_API_URL = 'http://localhost:4500'
-// import.meta.env.VITE_API_URL ||  
+
 
 export const API_BASE = (
- FALLBACK_API_URL
+  import.meta.env.VITE_API_URL || FALLBACK_API_URL
 ).replace(/\/+$/, '')
 
 /** Error carrying the HTTP status and the backend's own message. */
