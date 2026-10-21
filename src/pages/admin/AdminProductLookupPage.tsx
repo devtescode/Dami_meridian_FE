@@ -341,7 +341,7 @@ export default function AdminProductLookupPage() {
                 ? 'product-reference-hint product-reference-error'
                 : 'product-reference-hint'
             }
-            className="h-11 w-full min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 font-mono text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
+            className="h-11 w-full min-w-0 flex-1 rounded-lg border p-3 border-border bg-surface-2 px-3 font-mono text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
           />
           <button
             type="submit"
