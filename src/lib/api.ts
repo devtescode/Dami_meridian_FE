@@ -275,7 +275,9 @@ function matchesQuery(product: Product, term: string): boolean {
   const haystack = `${String(product.name ?? '')} ${String(
     product.description ?? '',
   )}`.toLowerCase()
-  return haystack.includes(term)
+  // The term is lower-cased too, so the fallback matches the server's
+  // case-insensitive search rather than only its lower-case spelling.
+  return haystack.includes(term.toLowerCase())
 }
 
 /** Reads a price as a number, or null when it cannot be read. */
