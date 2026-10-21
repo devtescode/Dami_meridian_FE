@@ -355,7 +355,7 @@ Every build carries a marker in the served `index.html`:
 
 ```html
 <meta name="application-name" content="DAMI MERIDIAN" />
-<meta name="build-id" content="dm-2026-10-21-lookup-1" />
+<meta name="build-id" content="dm-2026-10-21-rq-1" />
 ```
 
 Check which build is live:
@@ -364,7 +364,7 @@ Check which build is live:
 curl -s https://your-domain.example/ | grep -i 'build-id\|application-name'
 ```
 
-The output must contain `content="dm-2026-10-21-lookup-1"`. If it contains an older marker (or no marker at all), the deployment is serving an older build — check that `dist/` was rebuilt and redeployed, and that the build id in `index.html` was bumped.
+The output must contain `content="dm-2026-10-21-rq-1"`. If it contains an older marker (or no marker at all), the deployment is serving an older build — check that `dist/` was rebuilt and redeployed, and that the build id in `index.html` was bumped.
 
 **A hard refresh should no longer be needed.** The HTML entry point is served with `no-cache, no-store, must-revalidate, max-age=0`, so the browser revalidates and re-downloads the document on every normal load; it can never keep serving a cached document that points at an old bundle. The fingerprinted files under `/assets/` are served `immutable`, which is safe because their URLs change whenever the content changes.
 

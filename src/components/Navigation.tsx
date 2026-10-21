@@ -292,11 +292,10 @@ export function Navigation() {
     <>
       <nav
         aria-label="Primary"
-        className={`sticky top-0 z-50 w-full transition-all duration-500 ease-out ${
-          scrolled
+        className={`sticky top-0 z-50 w-full transition-all duration-500 ease-out ${scrolled
             ? 'glass-dark shadow-lg shadow-black/40'
             : 'bg-background/40 backdrop-blur-md'
-        }`}
+          }`}
       >
         <Container className="flex h-16 items-center justify-between gap-3 sm:h-20">
           {/* Brand lockup */}
@@ -305,14 +304,14 @@ export function Navigation() {
             aria-label={`${BRAND.name} — home`}
             className="flex min-w-0 shrink items-center"
           >
-              <img
-                src="/icon.png"
-                alt=""
-                width={40}
-                height={40}
-                className="h-15 w-15 sm:p-0 p-1 shrink-0 sm:h-15 sm:w-15"
-              />
-           
+            <img
+              src="/icon.png"
+              alt=""
+              width={40}
+              height={40}
+              className="h-15 w-15 rounded-md border-none p-1 sm:h-15 sm:w-15 sm:p-0"
+            />
+
           </Link>
 
           {/* Desktop navigation */}
@@ -324,18 +323,16 @@ export function Navigation() {
                   <Link
                     to={link.to}
                     aria-current={active ? 'page' : undefined}
-                    className={`group relative inline-flex min-h-[2.75rem] items-center px-1.5 text-xs uppercase tracking-widest transition-colors hover:text-foreground ${
-                      active ? 'text-primary' : 'text-muted-foreground'
-                    }`}
+                    className={`group relative inline-flex min-h-[2.75rem] items-center px-1.5 text-xs uppercase tracking-widest transition-colors hover:text-foreground ${active ? 'text-primary' : 'text-muted-foreground'
+                      }`}
                   >
                     {link.label}
                     <span
                       aria-hidden="true"
-                      className={`pointer-events-none absolute inset-x-1.5 bottom-2 h-px origin-left bg-primary/70 transition-transform duration-300 ${
-                        active
+                      className={`pointer-events-none absolute inset-x-1.5 bottom-2 h-px origin-left bg-primary/70 transition-transform duration-300 ${active
                           ? 'scale-x-100'
                           : 'scale-x-0 group-hover:scale-x-100'
-                      }`}
+                        }`}
                     />
                   </Link>
                 </li>
@@ -418,9 +415,8 @@ export function Navigation() {
         {/* Gold hairline — intensifies once the page has scrolled */}
         <div
           aria-hidden="true"
-          className={`h-px w-full bg-gradient-to-r from-transparent via-primary to-transparent transition-opacity duration-500 ${
-            scrolled ? 'opacity-70' : 'opacity-25'
-          }`}
+          className={`h-px w-full bg-gradient-to-r from-transparent via-primary to-transparent transition-opacity duration-500 ${scrolled ? 'opacity-70' : 'opacity-25'
+            }`}
         />
       </nav>
 
@@ -430,126 +426,122 @@ export function Navigation() {
       {createPortal(
         <div
           ref={overlayRef}
-          className={`fixed inset-x-0 top-0 h-[100dvh] z-[60] overflow-hidden lg:hidden ${
-            menuOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          }`}
+          className={`fixed inset-x-0 top-0 h-[100dvh] z-[60] overflow-hidden lg:hidden ${menuOpen ? 'pointer-events-auto' : 'pointer-events-none'
+            }`}
         >
-        <div
-          aria-hidden="true"
-          onClick={closeMenu}
-          className={`absolute inset-0 touch-none bg-background/85 backdrop-blur-sm transition-opacity duration-300 ${
-            menuOpen ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-
-        <div
-          id="mobile-nav-panel"
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Site menu"
-          inert={!menuOpen}
-          onKeyDown={handlePanelKeyDown}
-          className={`glass-dark absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col transition-transform duration-300 ease-out ${
-            menuOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          <span
+          <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 w-px bg-primary/50"
+            onClick={closeMenu}
+            className={`absolute inset-0 touch-none bg-background/85 backdrop-blur-sm transition-opacity duration-300 ${menuOpen ? 'opacity-100' : 'opacity-0'
+              }`}
           />
 
-          <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
-            <span className="font-display text-base tracking-[0.25em] text-gradient">
-              {BRAND.name}
-            </span>
-            <button
-              ref={closeRef}
-              type="button"
-              onClick={closeMenu}
-              aria-label="Close menu"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
-            >
-              <X className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </div>
+          <div
+            id="mobile-nav-panel"
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site menu"
+            inert={!menuOpen}
+            onKeyDown={handlePanelKeyDown}
+            className={`glass-dark absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col transition-transform duration-300 ease-out ${menuOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+          >
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 left-0 w-px bg-primary/50"
+            />
 
-          <div className="scrollbar-slim flex-1 overflow-y-auto overscroll-contain px-4 py-5">
-            {/* The desktop search field, sized for thumbs. */}
-            <form
-              role="search"
-              onSubmit={handleSearchSubmit}
-              className="relative mb-5"
-            >
-              <label htmlFor="nav-search-drawer" className="sr-only">
-                Search products
-              </label>
-              <Search
-                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <input
-                id="nav-search-drawer"
-                type="search"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search products…"
-                className="min-h-[2.75rem] w-full rounded-full border border-border bg-surface-2 py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
-              />
-            </form>
-
-            <ul className="flex flex-col gap-1">
-              {NAV_LINKS.map((link) => {
-                const active = isActive(link.to)
-                return (
-                  <li key={link.to}>
-                    <Link
-                      to={link.to}
-                      onClick={closeMenu}
-                      aria-current={active ? 'page' : undefined}
-                      className={`flex min-h-[3rem] w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left font-display text-2xl transition-colors hover:bg-primary/10 hover:text-primary ${
-                        active ? 'text-primary' : 'text-foreground/90'
-                      }`}
-                    >
-                      {link.label}
-                      <span
-                        aria-hidden="true"
-                        className="h-px w-8 shrink-0 bg-primary/40"
-                      />
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-
-          <div className="border-t border-border/70 px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-            <Link
-              to="/admin"
-              onClick={closeMenu}
-              className="flex min-h-[2.75rem] items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-primary"
-            >
-              <Shield className="h-4 w-4 text-primary/80" aria-hidden="true" />
-              Admin
-            </Link>
-
-            <div className="mt-3 flex flex-col gap-2">
-              {SOCIALS.map((social) => (
-                <SocialHandle key={social.id} social={social} />
-              ))}
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
+              <span className="font-display text-base tracking-[0.25em] text-gradient">
+                {BRAND.name}
+              </span>
+              <button
+                ref={closeRef}
+                type="button"
+                onClick={closeMenu}
+                aria-label="Close menu"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
             </div>
 
-            <a
-              href={LINKS.whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-gold btn-gold-hover mt-5 inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-full px-5 text-xs uppercase tracking-[0.18em]"
-            >
-              <MessageCircle className="h-4 w-4" aria-hidden="true" />
-              WhatsApp
-            </a>
+            <div className="scrollbar-slim flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+              {/* The desktop search field, sized for thumbs. */}
+              <form
+                role="search"
+                onSubmit={handleSearchSubmit}
+                className="relative mb-5"
+              >
+                <label htmlFor="nav-search-drawer" className="sr-only">
+                  Search products
+                </label>
+                <Search
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  id="nav-search-drawer"
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search products…"
+                  className="min-h-[2.75rem] w-full rounded-full border border-border bg-surface-2 py-3 pl-11 pr-4 text-sm text-foreground placeholder:text-subtle transition-colors focus:border-primary/60"
+                />
+              </form>
+
+              <ul className="flex flex-col gap-1">
+                {NAV_LINKS.map((link) => {
+                  const active = isActive(link.to)
+                  return (
+                    <li key={link.to}>
+                      <Link
+                        to={link.to}
+                        onClick={closeMenu}
+                        aria-current={active ? 'page' : undefined}
+                        className={`flex min-h-[3rem] w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left font-display text-2xl transition-colors hover:bg-primary/10 hover:text-primary ${active ? 'text-primary' : 'text-foreground/90'
+                          }`}
+                      >
+                        {link.label}
+                        <span
+                          aria-hidden="true"
+                          className="h-px w-8 shrink-0 bg-primary/40"
+                        />
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+
+            <div className="border-t border-border/70 px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+              <Link
+                to="/admin"
+                onClick={closeMenu}
+                className="flex min-h-[2.75rem] items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-primary"
+              >
+                <Shield className="h-4 w-4 text-primary/80" aria-hidden="true" />
+                Admin
+              </Link>
+
+              <div className="mt-3 flex flex-col gap-2">
+                {SOCIALS.map((social) => (
+                  <SocialHandle key={social.id} social={social} />
+                ))}
+              </div>
+
+              <a
+                href={LINKS.whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-gold btn-gold-hover mt-5 inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-full px-5 text-xs uppercase tracking-[0.18em]"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                WhatsApp
+              </a>
+            </div>
           </div>
-        </div>
         </div>,
         document.body,
       )}
