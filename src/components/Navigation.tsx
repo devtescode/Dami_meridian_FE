@@ -516,14 +516,14 @@ export function Navigation() {
             </div>
 
             <div className="border-t border-border/70 px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-              <Link
+              {/* <Link
                 to="/admin"
                 onClick={closeMenu}
                 className="flex min-h-[2.75rem] items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-primary"
               >
                 <Shield className="h-4 w-4 text-primary/80" aria-hidden="true" />
                 Admin
-              </Link>
+              </Link> */}
 
               <div className="mt-3 flex flex-col gap-2">
                 {SOCIALS.map((social) => (

@@ -59,13 +59,16 @@ export default function Footer() {
           <div className="sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-4">
               <img
-                src="/logo-mark.svg"
+                src="/icon.png"
                 alt={`${BRAND.name} logo mark`}
                 width={48}
                 height={48}
                 loading="lazy"
-                className="h-12 w-12 shrink-0"
+                // className="h-12 w-12 shrink-0"
+                className="h-15 w-15 rounded-xl border-none p-1 sm:h-15 sm:w-15 sm:p-0"
               />
+
+
               <div className="min-w-0">
                 <p className="font-display text-xl leading-none tracking-[0.2em] text-gradient sm:text-2xl">
                   {BRAND.name}
