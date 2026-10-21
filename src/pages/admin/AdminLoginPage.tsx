@@ -87,10 +87,11 @@ function AuthCard({
     <div className="animate-fade-in-up w-full rounded-2xl bg-surface p-6 gold-hairline sm:p-8">
       <div className="flex flex-col items-center text-center">
         <img
-          src="/logo-mark.svg"
+          src="/icon.png"
           alt=""
-          aria-hidden="true"
-          className="h-12 w-12"
+          width={40}
+          height={40}
+          className="h-15 w-15 rounded-md border-none p-1 sm:h-15 sm:w-15 sm:p-0"
         />
         <p className="eyebrow mt-5">{BRAND.name}</p>
         <h1 className="mt-2 font-display text-3xl leading-tight text-gradient sm:text-4xl">

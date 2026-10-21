@@ -4,6 +4,11 @@
    DAMI MERIDIAN — Design System
    STYLE. SCENT. IDENTITY.
    ========================================================================== */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
 
 @theme {
   /* ---- Surfaces ---- */
@@ -82,6 +87,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -92,6 +98,7 @@
     opacity: 0;
     transform: translateY(28px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -103,6 +110,7 @@
     opacity: 0;
     transform: translateY(-28px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -114,6 +122,7 @@
     opacity: 0;
     transform: translateX(-48px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -125,6 +134,7 @@
     opacity: 0;
     transform: translateX(48px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -132,20 +142,24 @@
 }
 
 @keyframes float {
+
   0%,
   100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-14px);
   }
 }
 
 @keyframes glow {
+
   0%,
   100% {
     box-shadow: 0 0 24px rgba(200, 162, 74, 0.28);
   }
+
   50% {
     box-shadow: 0 0 44px rgba(200, 162, 74, 0.5);
   }
@@ -155,16 +169,19 @@
   0% {
     background-position: -180% 0;
   }
+
   100% {
     background-position: 180% 0;
   }
 }
 
 @keyframes pulse-glow {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.55;
   }
@@ -174,6 +191,7 @@
   0% {
     transform: translateX(0);
   }
+
   100% {
     transform: translateX(-50%);
   }
@@ -225,6 +243,7 @@
     html {
       scroll-behavior: auto;
     }
+
     *,
     *::before,
     *::after {
@@ -267,13 +286,11 @@
 /* Gold gradient text — the stops read from the theme tokens so the darkest
    end can never drift away from --color-gold-deep. */
 @utility text-gradient {
-  background-image: linear-gradient(
-    100deg,
-    var(--color-gold-light) 0%,
-    var(--color-primary) 38%,
-    var(--color-gold-deep) 72%,
-    var(--color-gold-light) 100%
-  );
+  background-image: linear-gradient(100deg,
+      var(--color-gold-light) 0%,
+      var(--color-primary) 38%,
+      var(--color-gold-deep) 72%,
+      var(--color-gold-light) 100%);
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
@@ -296,12 +313,10 @@
 
 /* Primary CTA — solid gold with a travelling highlight */
 @utility btn-gold {
-  background-image: linear-gradient(
-    100deg,
-    #c8a24a 0%,
-    #e5c477 45%,
-    #c8a24a 90%
-  );
+  background-image: linear-gradient(100deg,
+      #c8a24a 0%,
+      #e5c477 45%,
+      #c8a24a 90%);
   background-size: 200% 100%;
   color: #0b0b0f;
   font-weight: 500;
@@ -350,12 +365,10 @@
 
 /* Gold rule used under headings */
 @utility rule-gold {
-  background-image: linear-gradient(
-    90deg,
-    transparent,
-    rgba(200, 162, 74, 0.85),
-    transparent
-  );
+  background-image: linear-gradient(90deg,
+      transparent,
+      rgba(200, 162, 74, 0.85),
+      transparent);
   height: 1px;
 }
 
@@ -389,13 +402,16 @@
     height: 8px;
     width: 8px;
   }
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+
   &::-webkit-scrollbar-thumb {
     background-color: var(--color-border);
     border-radius: 9999px;
   }
+
   &::-webkit-scrollbar-thumb:hover {
     background-color: #c8a24a;
   }

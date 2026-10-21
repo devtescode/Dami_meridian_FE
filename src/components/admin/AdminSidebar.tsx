@@ -269,11 +269,12 @@ export default function AdminSidebar({
         {/* Branding */}
         <div className="flex items-center gap-3 border-b border-border px-5 py-5">
           <img
-            src="/logo-mark.svg"
-            alt=""
-            aria-hidden="true"
-            className="h-10 w-10 shrink-0"
-          />
+          src="/icon.png"
+          alt=""
+          width={40}
+          height={40}
+          className="h-15 w-15 rounded-md border-none p-1 sm:h-15 sm:w-15 sm:p-0"
+        />
           <div className="min-w-0">
             <p className="truncate font-display text-[15px] leading-none tracking-[0.14em] text-gradient">
               {BRAND.name}
