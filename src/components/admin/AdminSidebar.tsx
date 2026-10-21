@@ -116,10 +116,17 @@ export default function AdminSidebar({
   // Lock the page behind the drawer so the content underneath cannot scroll.
   useEffect(() => {
     if (!isOpen || isDesktop) return
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const { body } = document
+    const previousOverflow = body.style.overflow
+    const previousPaddingRight = body.style.paddingRight
+    // Compensate for the vanishing scrollbar so the page does not jump sideways.
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth
+    body.style.overflow = 'hidden'
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`
     return () => {
-      document.body.style.overflow = previousOverflow
+      body.style.overflow = previousOverflow
+      body.style.paddingRight = previousPaddingRight
     }
   }, [isOpen, isDesktop])
 
@@ -237,7 +244,7 @@ export default function AdminSidebar({
         onClick={onClose}
         aria-hidden="true"
         className={cn(
-          'fixed inset-0 z-40 bg-background/80 backdrop-blur-sm transition-opacity duration-300 lg:hidden',
+          'fixed inset-0 z-40 touch-none bg-background/80 backdrop-blur-sm transition-opacity duration-300 lg:hidden',
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
       />
@@ -254,8 +261,8 @@ export default function AdminSidebar({
         // While the drawer is closed on mobile it must not be reachable by tab.
         inert={isDesktop || isOpen ? undefined : true}
         className={cn(
-          'fixed top-0 left-0 z-50 flex h-screen w-[17rem] max-w-[86vw] flex-col border-r border-border bg-surface transition-transform duration-300 ease-out',
-          'lg:sticky lg:top-0 lg:z-10 lg:h-screen lg:w-[17rem] lg:max-w-none lg:shrink-0 lg:translate-x-0',
+          'fixed top-0 left-0 z-50 flex h-dvh w-[17rem] max-w-[86vw] flex-col border-r border-border bg-surface transition-transform duration-300 ease-out',
+          'lg:sticky lg:top-0 lg:z-10 lg:h-dvh lg:w-[17rem] lg:max-w-none lg:shrink-0 lg:translate-x-0',
           isOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -288,7 +295,7 @@ export default function AdminSidebar({
 
         <nav
           aria-label="Sections"
-          className="scrollbar-slim flex-1 overflow-y-auto px-3 py-5"
+          className="scrollbar-slim flex-1 overflow-y-auto overscroll-contain px-3 py-5"
         >
           <ul className="space-y-1">
             {NAV_ITEMS.map((item) => {
@@ -339,7 +346,7 @@ export default function AdminSidebar({
           </div>
         </nav>
 
-        <div className="border-t border-border p-3">
+        <div className="border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <Link
             to="/"
             onClick={onClose}

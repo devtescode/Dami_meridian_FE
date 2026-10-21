@@ -15,7 +15,7 @@ import NotFoundPage from '@/pages/NotFoundPage'
 import AdminLoginPage from '@/pages/admin/AdminLoginPage'
 import AdminRegisterPage from '@/pages/admin/AdminRegisterPage'
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage'
-// import AdminProductLookupPage from '@/pages/admin/AdminProductLookupPage'
+import AdminProductLookupPage from '@/pages/admin/AdminProductLookupPage'
 import AdminProductsPage from '@/pages/admin/AdminProductsPage'
 import AdminAddProductPage from '@/pages/admin/AdminAddProductPage'
 import AdminEditProductPage from '@/pages/admin/AdminEditProductPage'
@@ -73,10 +73,10 @@ export default function App() {
             path="/admin/products/:id/edit"
             element={<AdminEditProductPage />}
           />
-          {/* <Route
+          <Route
             path="/admin/products/lookup"
             element={<AdminProductLookupPage />}
-          /> */}
+          />
           <Route path="/admin/settings" element={<AdminSettingsPage />} />
           <Route
             path="/admin/change-password"

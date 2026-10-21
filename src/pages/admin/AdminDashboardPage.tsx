@@ -3,7 +3,7 @@ import { AlertCircle, ArrowRight, ImageOff, Plus, Search } from 'lucide-react'
 
 import InventorySummary from '@/components/admin/InventorySummary'
 
-import { useProducts } from '@/hooks/useProducts'
+import { useProductListQuery } from '@/hooks/queries/useProductListQuery'
 import { availabilityLabel, availabilityPillClass } from '@/lib/availability'
 import { formatNaira } from '@/lib/brand'
 import { getCollectionName } from '@/lib/collections'
@@ -123,7 +123,7 @@ function RecentCard({ product }: { product: Product }) {
 }
 
 export default function AdminDashboardPage() {
-  const { products, isLoading, error, refetch } = useProducts()
+  const { products, isLoading, error, refetch } = useProductListQuery()
 
   const showSkeletons = isLoading && products.length === 0
   // An empty list is only meaningful when the request actually succeeded —
@@ -155,14 +155,6 @@ export default function AdminDashboardPage() {
             Add Product
           </Link>
           <Link
-            to="/admin/products/lookup"
-            title="Fetch a product's full details from its Reference code."
-            className="btn-outline-gold btn-outline-gold-hover inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm uppercase tracking-[0.12em]"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-            Look up by reference
-          </Link>
-          <Link
             to="/admin/products"
             className="btn-outline-gold btn-outline-gold-hover inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm uppercase tracking-[0.12em]"
           >
@@ -171,6 +163,26 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
       </header>
+
+      {/* Quick actions — card-style entry points, each ~360px wide. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(360px,1fr))]">
+        <Link
+          to="/admin/products/lookup"
+          className="card-luxury card-luxury-hover flex items-start gap-3 rounded-xl p-4"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-2">
+            <Search className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-foreground">
+              Look up by reference
+            </span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Fetch a product's full details from its Reference code.
+            </span>
+          </span>
+        </Link>
+      </div>
 
       {error ? (
         <div

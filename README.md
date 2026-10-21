@@ -39,22 +39,25 @@ Home sections worth calling out:
 | **FAQ** | Accessible accordion (one panel open at a time, `aria-expanded`/`aria-controls`). |
 | **Contact** | WhatsApp, phone and location cards, plus a form that hands the message off to WhatsApp. |
 
+**Search state** — `?q=` on the Shop URL is the single source of truth for search: the committed term is derived from `useSearchParams` (trimmed, lowercased) and never stored in state, so the two can never drift apart. The visible search box is local UI state adopted one-way from the URL — an effect syncs external writes (e.g. the nav bar navigating to `/shop?q=…` while the section is already mounted), guarded by normalized equality so it can never bounce a committed value back. Typing debounces a 200 ms write-back with `{ replace: true }`, keeping keystrokes out of the history stack, and every `setSearchParams` call is value-guarded so an equal value causes zero navigation.
+
 ### Admin (`/admin/*`)
 
 A responsive sidebar dashboard for managing the catalogue — also fully routed, with `AdminLayout` guarding every protected screen (unauthenticated visitors are redirected to `/admin/login`; an expired JWT triggers `UNAUTHORIZED_EVENT` → cleared session → login with a notice).
 
-| Route | Page |
-| --- | --- |
-| `/admin` | Session-aware redirect (dashboard if valid, login otherwise) |
-| `/admin/login` | `AdminLoginPage` (authenticated → dashboard) |
-| `/admin/register` | `AdminRegisterPage` (offered **only** while `GET /admin/status` reports no admin) |
-| `/admin/dashboard` | `AdminDashboardPage` |
-| `/admin/products` | `AdminProductsPage` |
-| `/admin/products/new` | `AdminAddProductPage` |
-| `/admin/products/:id/edit` | `AdminEditProductPage` |
-| `/admin/settings` | `AdminSettingsPage` |
-| `/admin/change-password` | `AdminChangePasswordPage` |
-| `/admin/*` (unknown) | Redirect to `/admin` |
+| Route | Page | Notes |
+| --- | --- | --- |
+| `/admin` | Session-aware redirect (dashboard if valid, login otherwise) | |
+| `/admin/login` | `AdminLoginPage` (authenticated → dashboard) | |
+| `/admin/register` | `AdminRegisterPage` (offered **only** while `GET /admin/status` reports no admin) | |
+| `/admin/dashboard` | `AdminDashboardPage` | |
+| `/admin/products` | `AdminProductsPage` | |
+| `/admin/products/lookup` | `AdminProductLookupPage` | Fetch a product's full details by Reference (Mongo `_id`) — deep-linkable via `?ref=<id>` |
+| `/admin/products/new` | `AdminAddProductPage` | |
+| `/admin/products/:id/edit` | `AdminEditProductPage` | |
+| `/admin/settings` | `AdminSettingsPage` | |
+| `/admin/change-password` | `AdminChangePasswordPage` | |
+| `/admin/*` (unknown) | Redirect to `/admin` | |
 
 1. **Bootstrap** — `GET /admin/status` decides the screen: registration is shown **only** when no admin exists, otherwise login.
 2. **Login / register** — email + password; the returned JWT is stored in `sessionStorage` and decoded locally to enforce the 1-hour expiry client-side.
@@ -63,6 +66,7 @@ A responsive sidebar dashboard for managing the catalogue — also fully routed,
 5. **Add / edit product** — name, collection, price, availability, description, optional sizes/colors/fragrance details, and multi-image drag-and-drop upload (PNG/JPG, ≤ 5 MB each) with previews for both new and already-saved images.
 6. **Settings / Change Password** — current + new password with show/hide toggles and inline validation.
 7. **Logout** — clears the session.
+8. **Product Lookup** (`/admin/products/lookup`) — fetch a single product by its Reference: the 24-hex Mongo `_id` (a pasted product URL is accepted too — the id is pulled from its last path segment). The page moves through explicit states: an idle explainer, a loading spinner, and a 404/network error state that keeps the API client's own wording and offers Retry. On success it renders the full record — gallery, price, availability, collection, sizes/colors/fragrance details — with a **Copy reference** button and **Edit product** / **View storefront page** actions. It is deep-linkable via `?ref=<id>` and is reachable from the sidebar's **Product Lookup** entry, the **Look up reference** button in the Products header, a quick-action card on the Dashboard, the per-row copy-reference and view (eye) actions in the product table, and the **Reference** line with its copy button on the edit page.
 
 ---
 
@@ -73,6 +77,7 @@ A responsive sidebar dashboard for managing the catalogue — also fully routed,
 | Build tool | Vite 5 (`@vitejs/plugin-react`) |
 | Framework | React 19 + TypeScript 5.7 (strict) |
 | Routing | react-router-dom 6 (`BrowserRouter`) |
+| Server state | TanStack React Query 5 — one cache, shared by every screen |
 | Styling | Tailwind CSS v4 (CSS-first config in `src/index.css`) |
 | Type | Cormorant Garamond (display) + Jost (body), self-hosted via Fontsource |
 | Icons | lucide-react, react-icons |
@@ -80,6 +85,46 @@ A responsive sidebar dashboard for managing the catalogue — also fully routed,
 | Backend | Separate Express + MongoDB API hosted on Render — **not in this repo** |
 
 `@radix-ui/*`, `recharts`, `react-hook-form`, `zod`, `sonner` and friends are installed for the shadcn/ui set in `src/components/ui`, which is currently unused by the application itself.
+
+---
+
+## Server state (TanStack React Query)
+
+Every piece of **server** state goes through React Query. Ordinary UI state — form
+inputs, the mobile drawer, the search box, the sort dropdown — stays in React
+state, because it is not the server's business.
+
+| Piece | Where |
+| --- | --- |
+| The client | `src/lib/queryClient.ts` — a single module-level instance |
+| The keys | `src/lib/queryKeys.ts` — one factory for the whole app |
+| The queries | `src/hooks/queries/*` |
+| The writes | `src/hooks/mutations/*` |
+| The provider | `src/main.tsx` — mounted once, around `<App />` |
+
+**Defaults** — a catalogue page stays fresh for 60 s and is dropped from the
+cache after 5 min of disuse; returning to the tab does not re-download it; one
+retry covers a transient network blip, but a 4xx is never retried.
+
+**Query keys** carry everything that changes the answer, so two views of the
+same thing share one request:
+
+```
+['products']                                    → the whole product family
+['products', 'list']                            → the full catalogue
+['products', 'page', {page,limit,q,collection,sort}] → one page
+['products', 'detail', '<id>']                  → one product
+```
+
+**Invalidation** is targeted. Creating, editing or deleting a product
+invalidates the product family — the shop pages, the admin table, the dashboard
+statistics and the product page all refresh — and nothing else. The admin
+session's cached data is dropped when the session ends or expires.
+
+**Cancellation** is real. `src/lib/api.ts` combines the caller's `AbortSignal`
+with its own timeout, so React Query can abort a request when a query key
+changes or a component unmounts, and a cancelled request is never reported to
+the visitor as a failure.
 
 ---
 
@@ -133,12 +178,21 @@ npm run dev      # http://localhost:3000
     ├── vite-env.d.ts          # VITE_API_URL typing
     ├── types/product.ts       # Product, AdminFormProduct, InventorySummary
     ├── hooks/
-    │   ├── useProducts.ts     # Catalogue loader (loading / error / refetch)
+    │   ├── queries/           # TanStack React Query hooks (one file per resource)
+    │   │   ├── useProductPageQuery.ts  # One page of the catalogue
+    │   │   ├── useProductListQuery.ts  # The full catalogue
+    │   │   ├── useProductQuery.ts      # One product by reference
+    │   │   └── useAdminStatusQuery.ts  # Has an admin been registered?
+    │   ├── mutations/         # React Query writes + targeted invalidation
+    │   │   ├── useProductMutations.ts  # Create / update / delete a product
+    │   │   └── useAuthMutations.ts     # Login / register / change password
     │   ├── usePageTitle.ts    # document.title per page, restored on unmount
     │   ├── use-mobile.ts      # (shadcn)
     │   └── use-toast.ts       # (shadcn)
     ├── lib/
     │   ├── api.ts             # API client + VITE_API_URL + getProduct(id) + Bearer auth
+    │   ├── queryClient.ts     # The single TanStack QueryClient + its defaults
+    │   ├── queryKeys.ts       # Every server-state key, in one factory
     │   ├── brand.ts           # Brand constants and contact details
     │   ├── collections.ts     # The five collections
     │   ├── availability.ts    # Availability badge helpers
@@ -201,10 +255,10 @@ The frontend talks to a **separate** Express + MongoDB service. The base URL is 
 ```bash
 # .env.local  (git-ignored)
 VITE_API_URL=http://localhost:4500   # for a local backend — use the PORT from the backend's .env
-# unset → https://rockyluxe-bd.onrender.com (live)
+# unset → https://dami-meridian-be.onrender.com (live)
 ```
 
-> The Render service is still named `rockyluxe-bd`. That is infrastructure, not branding — if you rename the service, update `VITE_API_URL` and the fallback in `src/lib/api.ts`.
+> The live service is `dami-meridian-be.onrender.com`. If the Render service is ever renamed, update `VITE_API_URL` and the fallback in `src/lib/api.ts`.
 
 | Method | Endpoint | Auth | Purpose |
 | --- | --- | --- | --- |
@@ -218,7 +272,7 @@ VITE_API_URL=http://localhost:4500   # for a local backend — use the PORT from
 | `POST` | `/admin/register` | public | Creates the first admin only |
 | `PUT` | `/admin/changepassword` | **Bearer** | Change admin password |
 
-`src/lib/api.ts` attaches `Authorization: Bearer <token>` to every protected call automatically, using the token from `src/lib/session.ts`. `getProduct(id)` validates the ObjectId client-side before calling, so a malformed URL short-circuits to the 404 state without hitting the API.
+`src/lib/api.ts` attaches `Authorization: Bearer <token>` to every protected call automatically, using the token from `src/lib/session.ts`. `getProduct(id)` validates the ObjectId client-side before calling, so a malformed URL short-circuits to the 404 state without hitting the API. `GET /jewelry/products/:id` also powers the admin Product Lookup page (`/admin/products/lookup`), which reuses the same client-side reference validation.
 
 ### Product shape
 
@@ -301,7 +355,7 @@ Every build carries a marker in the served `index.html`:
 
 ```html
 <meta name="application-name" content="DAMI MERIDIAN" />
-<meta name="build-id" content="dm-2026-10-20-routes-1" />
+<meta name="build-id" content="dm-2026-10-21-lookup-1" />
 ```
 
 Check which build is live:
@@ -310,7 +364,7 @@ Check which build is live:
 curl -s https://your-domain.example/ | grep -i 'build-id\|application-name'
 ```
 
-The output must contain `content="dm-2026-10-20-routes-1"`. If it contains an older marker (or no marker at all), the deployment is serving an older build — check that `dist/` was rebuilt and redeployed, and that the build id in `index.html` was bumped.
+The output must contain `content="dm-2026-10-21-lookup-1"`. If it contains an older marker (or no marker at all), the deployment is serving an older build — check that `dist/` was rebuilt and redeployed, and that the build id in `index.html` was bumped.
 
 **A hard refresh should no longer be needed.** The HTML entry point is served with `no-cache, no-store, must-revalidate, max-age=0`, so the browser revalidates and re-downloads the document on every normal load; it can never keep serving a cached document that points at an old bundle. The fingerprinted files under `/assets/` are served `immutable`, which is safe because their URLs change whenever the content changes.
 
@@ -360,6 +414,8 @@ Production build (`npm run build`):
 | `index.js` | 524.59 kB | 145.69 kB |
 | `index.css` | 155.49 kB | 23.54 kB |
 | Fonts | 8 woff2 subsets, self-hosted | — |
+
+> Sizes above are indicative only — the next build will re-measure and refresh them.
 
 Typecheck (`npm run typecheck`) is clean. `lucide-react` tree-shakes correctly, so unused icons are not shipped.
 

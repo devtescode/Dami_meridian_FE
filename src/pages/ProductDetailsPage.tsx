@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { PackageX, RefreshCw, TriangleAlert, WifiOff } from 'lucide-react'
 
 import ProductCard from '@/components/ProductCard'
 import { ProductDetailView } from '@/components/ProductDetailView'
 import { Container, Section } from '@/components/Section'
-import { ApiError, getProduct, getProducts } from '@/lib/api'
+
+import { useProductListQuery } from '@/hooks/queries/useProductListQuery'
+import { useProductQuery } from '@/hooks/queries/useProductQuery'
+import { ApiError } from '@/lib/api'
 import { BRAND } from '@/lib/brand'
 import { getCollectionName, resolveCollectionId } from '@/lib/collections'
 import { cn } from '@/lib/utils'
@@ -139,49 +142,20 @@ export default function ProductDetailsPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
 
-  const [product, setProduct] = useState<Product | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<ApiError | null>(null)
-  const [retryToken, setRetryToken] = useState(0)
-  const [related, setRelated] = useState<Product[]>([])
+  const {
+    product,
+    isPending,
+    isError,
+    status,
+    error: errorMessage,
+    refetch,
+  } = useProductQuery(id)
+
+  // The catalogue is shared with the admin screens — one request, one cache.
+  const { products, error: listError } = useProductListQuery()
 
   // The document title as it was before this route mounted, restored on leave.
   const baseTitleRef = useRef(document.title)
-
-  /* ------------------------------ Primary fetch ------------------------------ */
-  useEffect(() => {
-    let cancelled = false
-
-    setIsLoading(true)
-    setError(null)
-    setProduct(null)
-    setRelated([])
-
-    getProduct(id)
-      .then((data) => {
-        if (!cancelled) setProduct(data)
-      })
-      .catch((reason: unknown) => {
-        if (cancelled) return
-        setError(
-          reason instanceof ApiError
-            ? reason
-            : new ApiError(
-                reason instanceof Error && reason.message
-                  ? reason.message
-                  : 'Something went wrong while loading this product.',
-                -1,
-              ),
-        )
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [id, retryToken])
 
   /* ------------------------------- Page title ------------------------------- */
   useEffect(() => {
@@ -195,32 +169,34 @@ export default function ProductDetailsPage() {
   /* --------------------------- "You may also like" -------------------------- */
   // Optional strip: any failure here is swallowed so it can never take the
   // product page down with it.
-  useEffect(() => {
-    if (!product) return
-    let cancelled = false
+  const related = useMemo<Product[]>(() => {
+    if (!product || listError) return []
+    if (!Array.isArray(products)) return []
 
-    getProducts()
-      .then((all) => {
-        if (cancelled || !Array.isArray(all)) return
-        const collectionId = resolveCollectionId(product)
-        const matches = all.filter(
-          (candidate) =>
-            candidate._id !== undefined &&
-            candidate._id !== product._id &&
-            resolveCollectionId(candidate) === collectionId,
-        )
-        setRelated(matches.slice(0, 4))
-      })
-      .catch(() => {
-        if (!cancelled) setRelated([])
-      })
+    const collectionId = resolveCollectionId(product)
+    return products
+      .filter(
+        (candidate) =>
+          candidate._id !== undefined &&
+          candidate._id !== product._id &&
+          resolveCollectionId(candidate) === collectionId,
+      )
+      .slice(0, 4)
+  }, [product, products, listError])
 
-    return () => {
-      cancelled = true
-    }
-  }, [product])
-
-  const retry = () => setRetryToken((token) => token + 1)
+  /* --------------------------------- Error ---------------------------------- */
+  // The hook reports the HTTP status and the message separately; the error
+  // panel still wants them together.
+  const failure = useMemo(
+    () =>
+      isError
+        ? new ApiError(
+            errorMessage ?? 'Something went wrong while loading this product.',
+            status,
+          )
+        : null,
+    [isError, errorMessage, status],
+  )
 
   // History-aware back: return to wherever the visitor came from (the shop
   // keeps its filters that way), or land on the shop when this is a deep link.
@@ -234,15 +210,18 @@ export default function ProductDetailsPage() {
 
   /* --------------------------------- Render --------------------------------- */
 
-  if (error) {
+  // The panel is for a product that could not be loaded at all. A failed
+  // background refetch of an already-loaded product leaves the product on
+  // screen, exactly as it did before.
+  if (failure && !product) {
     return (
       <div className="animate-fade-in">
-        <ProductErrorState error={error} onRetry={retry} />
+        <ProductErrorState error={failure} onRetry={refetch} />
       </div>
     )
   }
 
-  if (isLoading || !product) {
+  if (isPending || !product) {
     return <ProductDetailsSkeleton />
   }
 

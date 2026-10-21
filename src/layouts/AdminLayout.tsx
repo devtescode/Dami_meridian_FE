@@ -14,6 +14,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 import { LogOut, Menu, Store } from 'lucide-react'
 
 import AdminSidebar from '@/components/admin/AdminSidebar'
+import { useClearProductCache } from '@/hooks/mutations/useProductMutations'
 import { UNAUTHORIZED_EVENT } from '@/lib/api'
 import { BRAND } from '@/lib/brand'
 import { clearSession, isSessionValid } from '@/lib/session'
@@ -25,6 +26,7 @@ import { clearSession, isSessionValid } from '@/lib/session'
 const TITLE_RULES: ReadonlyArray<{ prefix: string; title: string }> = [
   { prefix: '/admin/dashboard', title: 'Dashboard' },
   { prefix: '/admin/products/new', title: 'Add Product' },
+  { prefix: '/admin/products/lookup', title: 'Product Lookup' },
   { prefix: '/admin/products', title: 'Products' },
   { prefix: '/admin/settings', title: 'Settings' },
   { prefix: '/admin/change-password', title: 'Change Password' },
@@ -57,6 +59,12 @@ export default function AdminLayout() {
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   /**
+   * Drops the cached catalogue when the session ends, so nothing the admin
+   * browsed outlives their access to the admin panel.
+   */
+  const clearProductCache = useClearProductCache()
+
+  /**
    * Focus the trigger before opening so the drawer always has an element to
    * hand focus back to when it closes.
    */
@@ -70,15 +78,26 @@ export default function AdminLayout() {
     setDrawerOpen(false)
   }, [location.pathname])
 
-  // Escape closes the off-canvas drawer, mirroring the sidebar's own behaviour.
+  /**
+   * Crossing the `lg` breakpoint must never leave the drawer in a stale
+   * state. The sidebar switches itself to a permanent rail at `lg`, but the
+   * `drawerOpen` flag lives here — so without this, growing the window past
+   * 1024px would leave the flag `true` and SHRINKING it again would bring
+   * the drawer back by itself, over content the admin never asked to see.
+   * Mirrors the storefront's own resize handling in `Navigation`.
+   */
   useEffect(() => {
-    if (!drawerOpen) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeDrawer()
+    const query = window.matchMedia('(min-width: 1024px)')
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setDrawerOpen(false)
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [drawerOpen, closeDrawer])
+    query.addEventListener('change', handleChange)
+    return () => query.removeEventListener('change', handleChange)
+  }, [])
+
+  // Escape is handled exclusively by AdminSidebar: its keydown effect runs in
+  // the modal context and also drives the Tab trap, so a second global
+  // listener here would fire twice for the same keypress.
 
   const title = resolveTitle(location.pathname)
 
@@ -100,6 +119,8 @@ export default function AdminLayout() {
   useEffect(() => {
     const handleUnauthorized = () => {
       clearSession()
+      // Whatever the session fetched must not outlive it.
+      clearProductCache()
       navigate('/admin/login', {
         replace: true,
         state: { notice: 'Your session expired. Please sign in again.' },
@@ -109,7 +130,7 @@ export default function AdminLayout() {
     window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
     return () =>
       window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
-  }, [navigate])
+  }, [navigate, clearProductCache])
 
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" replace />
@@ -118,11 +139,26 @@ export default function AdminLayout() {
   const handleLogout = () => {
     setDrawerOpen(false)
     clearSession()
+    // The catalogue the admin browsed is dropped from the cache, so the
+    // next session starts from the server rather than from whatever this
+    // one left behind.
+    clearProductCache()
     navigate('/admin/login', { replace: true })
   }
 
   return (
     <div className="min-h-screen bg-background lg:flex">
+      {/* First focusable element in the shell: `aside` + `header` otherwise
+          steal ~12 Tab presses on every admin route. Follows the storefront's
+          sr-only-until-focus pattern; `z-50` clears the sticky header (z-30)
+          and the drawer backdrop (z-40). */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:inline-flex focus:min-h-[44px] focus:items-center focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+      >
+        Skip to main content
+      </a>
+
       <AdminSidebar
         isOpen={drawerOpen}
         onClose={closeDrawer}
@@ -178,7 +214,15 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <main className="px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        {/* `id="main"` is the skip-link target and ScrollToTop's route-change
+            focus landing; `tabIndex={-1}` makes focus actually move here in
+            Safari/Firefox; `outline-none` keeps the ring off a programmatically
+            focused landmark — same treatment as PublicLayout's `#main`. */}
+        <main
+          id="main"
+          tabIndex={-1}
+          className="px-4 py-6 outline-none sm:px-6 sm:py-8 lg:px-8"
+        >
           <Outlet />
         </main>
       </div>

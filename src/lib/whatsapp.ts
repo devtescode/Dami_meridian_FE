@@ -13,6 +13,16 @@ function isObjectId(value: string | undefined | null): value is string {
 }
 
 /**
+ * A value that is safe to print on its own line: non-blank once trimmed.
+ * Keeps whitespace-only picks (" ") from emitting a label with no value —
+ * e.g. a stray blank size on an apparel record must not print "Size:" alone.
+ */
+function toField(value: string | undefined | null): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+/**
  * The public URL of a product's detail page. Relative references (ids) are
  * resolved against the current origin so the link works from any route.
  */
@@ -52,27 +62,32 @@ export interface ProductOrderOptions {
 
 /**
  * Builds the prefilled WhatsApp order message.
- * Contains the brand, product name, chosen options, price and an image link
- * so the store can identify exactly what the customer is asking about.
+ * One line per field: brand greeting, product name, price, apparel options,
+ * reference, the product's page URL and an image link — everything the store
+ * needs to identify exactly what the customer is asking about. Blank fields
+ * are omitted rather than emitted as bare labels.
  */
 export function buildProductOrderText(
   product: OrderProduct,
   options?: ProductOrderOptions,
 ): string {
-  let message = `Hello ${BRAND.name}, I want to order:\n\n`
-  message += `Product: ${product.name}\n`
+  const lines: string[] = [`Product: ${product.name}`]
 
   const price = formatNaira(product.price)
   if (price) {
-    message += `Price: ${price}`
+    lines.push(`Price: ${price}`)
   }
 
-  if (options?.size) {
-    message += `\nSize: ${options.size}`
+  // Blank selections are dropped entirely so a stray empty size can never
+  // render a value-less "Size:" line.
+  const size = toField(options?.size)
+  if (size) {
+    lines.push(`Size: ${size}`)
   }
 
-  if (options?.color) {
-    message += `\nColour: ${options.color}`
+  const color = toField(options?.color)
+  if (color) {
+    lines.push(`Colour: ${color}`)
   }
 
   if (
@@ -80,29 +95,29 @@ export function buildProductOrderText(
     options.totalImages > 1 &&
     options.imageIndex !== undefined
   ) {
-    message += `\nPhoto: ${options.imageIndex + 1} of ${options.totalImages}`
+    lines.push(`Photo: ${options.imageIndex + 1} of ${options.totalImages}`)
   }
 
-  if (options?.reference) {
-    message += `\nReference: ${options.reference}`
+  const reference = toField(options?.reference)
+  if (reference) {
+    lines.push(`Reference: ${reference}`)
   }
 
   // Every order message carries a link back to the product's own page, so
   // the store can open the exact record behind the reference.
-  const reference = options?.reference
   const productUrl =
     options?.productUrl ??
     (isObjectId(reference) ? getProductUrl(reference) : undefined)
   if (productUrl) {
-    message += `\nProduct page: ${productUrl}`
+    lines.push(`Product page: ${productUrl}`)
   }
 
   const imageUrl = options?.imageUrl ?? getPrimaryImage(product.imageURLs)
   if (imageUrl) {
-    message += `\n\nProduct image:\n${imageUrl}`
+    lines.push(`Product image: ${imageUrl}`)
   }
 
-  return message
+  return `Hello ${BRAND.name}, I want to order:\n\n${lines.join('\n')}`
 }
 
 export function buildWhatsAppLink(text?: string): string {

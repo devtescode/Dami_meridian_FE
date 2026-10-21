@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { ChevronRight, KeyRound, LogOut, Store } from 'lucide-react'
 
+import { useClearProductCache } from '@/hooks/mutations/useProductMutations'
 import { BRAND, PHONE_DISPLAY, WHATSAPP_DISPLAY } from '@/lib/brand'
 import { clearSession, getTokenExpiry, isSessionValid } from '@/lib/session'
 import { cn } from '@/lib/utils'
@@ -15,6 +16,7 @@ const ABOUT_ROWS: Array<{ label: string; value: string }> = [
 
 export default function AdminSettingsPage() {
   const navigate = useNavigate()
+  const clearProductCache = useClearProductCache()
 
   const sessionActive = isSessionValid()
   const expiry = getTokenExpiry()
@@ -27,6 +29,10 @@ export default function AdminSettingsPage() {
 
   const handleLogout = () => {
     clearSession()
+    // The catalogue the admin browsed is dropped from the cache, so the
+    // next session starts from the server rather than from whatever this
+    // one left behind.
+    clearProductCache()
     navigate('/admin/login', { replace: true })
   }
 

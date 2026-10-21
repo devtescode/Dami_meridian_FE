@@ -5,8 +5,9 @@ import Swal from 'sweetalert2'
 
 import ProductTable from '@/components/admin/ProductTable'
 
-import { useProducts } from '@/hooks/useProducts'
-import { ApiError, deleteProduct } from '@/lib/api'
+import { useProductMutations } from '@/hooks/mutations/useProductMutations'
+import { useProductListQuery } from '@/hooks/queries/useProductListQuery'
+import { ApiError } from '@/lib/api'
 import type { Product } from '@/types/product'
 
 /** Shimmering stand-in for the table while the first load is in flight. */
@@ -41,7 +42,8 @@ function TableSkeleton() {
 
 export default function AdminProductsPage() {
   const navigate = useNavigate()
-  const { products, isLoading, error, refetch } = useProducts()
+  const { products, isLoading, error, refetch } = useProductListQuery()
+  const { removeProduct } = useProductMutations()
 
   const [isDeleting, setIsDeleting] = useState(false)
   // A ref, not just state: it is read synchronously at the top of the handler,
@@ -84,8 +86,9 @@ export default function AdminProductsPage() {
     deleteInFlight.current = true
     setIsDeleting(true)
     try {
-      await deleteProduct(id)
-      await refetch()
+      // The mutation invalidates the product queries on success, so the
+      // table refreshes on its own — no explicit refetch needed here.
+      await removeProduct.mutateAsync(id)
       Swal.fire({
         icon: 'success',
         title: 'Deleted',
@@ -137,7 +140,7 @@ export default function AdminProductsPage() {
           <Link
             to="/admin/products/lookup"
             title="Find a product by its Reference code"
-            className="btn-outline-gold btn-outline-gold-hover inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm uppercase tracking-[0.12em]"
+            className="btn-outline-gold btn-outline-gold-hover inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm uppercase tracking-[0.12em]"
           >
             <Search className="h-4 w-4" aria-hidden="true" />
             Look up reference

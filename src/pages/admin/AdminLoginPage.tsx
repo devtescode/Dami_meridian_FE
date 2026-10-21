@@ -9,18 +9,20 @@
  *   3. hand off to `/admin/dashboard` — behind AdminLayout's guard — once
  *      `setSession()` has stored the fresh JWT.
  *
- * Every request goes through `@/lib/api` so the base URL lives in one place,
- * and the JWT is stored through `@/lib/session` so the token and the auth flag
- * can never drift apart.
+ * Every request goes through `@/lib/api` so the base URL lives in one place —
+ * reached through the React Query hooks — and the JWT is stored through
+ * `@/lib/session` so the token and the auth flag can never drift apart.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react'
 
+import { useAdminLoginMutation } from '@/hooks/mutations/useAuthMutations'
+import { useAdminStatusQuery } from '@/hooks/queries/useAdminStatusQuery'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { ApiError, UNAUTHORIZED_EVENT, adminLogin, getAdminStatus } from '@/lib/api'
+import { ApiError, UNAUTHORIZED_EVENT } from '@/lib/api'
 import { BRAND } from '@/lib/brand'
 import { isSessionValid, setSession } from '@/lib/session'
 
@@ -250,22 +252,27 @@ function LoginForm({ notice, onAuthenticated }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // The mutation owns the in-flight state; the form only owns its inputs.
+  const loginMutation = useAdminLoginMutation()
+  const isSubmitting = loginMutation.isPending
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (isSubmitting) return
 
     setError(null)
-    setIsSubmitting(true)
 
     try {
-      const data = await adminLogin(email.trim(), password)
+      const data = await loginMutation.mutateAsync({
+        email: email.trim(),
+        password,
+      })
       onAuthenticated(data.token)
     } catch (err) {
+      // `mutateAsync` rejects with the API failure, so the wording below is
+      // the backend's own.
       setError(describeError(err, 'Unable to sign in. Please try again.'))
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -346,38 +353,21 @@ export default function AdminLoginPage() {
   const location = useLocation()
   usePageTitle('Admin Login')
 
-  const [adminExists, setAdminExists] = useState<boolean | null>(null)
-  const [statusError, setStatusError] = useState<string | null>(null)
-  const [isBooting, setIsBooting] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const {
+    adminExists,
+    isLoading,
+    error: statusError,
+    refetch: refetchStatus,
+  } = useAdminStatusQuery()
+
   const [notice, setNotice] = useState<string | null>(
     () => (location.state as LoginLocationState | null)?.notice ?? null,
   )
 
-  const checkStatus = useCallback(async (): Promise<void> => {
-    setStatusError(null)
-    try {
-      const status = await getAdminStatus()
-      setAdminExists(status.adminExists)
-    } catch (error) {
-      // The admin may still exist server-side, so keep the login form usable.
-      setStatusError(describeError(error, 'Could not verify the admin account.'))
-    }
-  }, [])
-
-  useEffect(() => {
-    // A live session means the admin is already signed in — skip the lookup,
-    // the Navigate below is about to take over.
-    if (isSessionValid()) return
-
-    let active = true
-    void checkStatus().finally(() => {
-      if (active) setIsBooting(false)
-    })
-    return () => {
-      active = false
-    }
-  }, [checkStatus])
+  // The boot screen covers the lookup while there is no answer yet — the very
+  // first request and any retry after a failure. A refresh over an answer we
+  // already hold leaves the screen that is on display alone.
+  const isBooting = isLoading && adminExists === null && statusError === null
 
   // The API client signals an expired or rejected session. The token has
   // already been cleared at that point, so drop straight back to the login
@@ -404,8 +394,7 @@ export default function AdminLoginPage() {
   }
 
   const handleRetryStatus = () => {
-    setIsRefreshing(true)
-    void checkStatus().finally(() => setIsRefreshing(false))
+    refetchStatus()
   }
 
   // Already signed in → straight to the protected dashboard.
@@ -434,10 +423,10 @@ export default function AdminLoginPage() {
             <button
               type="button"
               onClick={handleRetryStatus}
-              disabled={isRefreshing}
+              disabled={isLoading}
               className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm text-gold-light underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
             >
-              {isRefreshing && (
+              {isLoading && (
                 <Loader2 size={14} className="animate-spin" aria-hidden="true" />
               )}
               Try again

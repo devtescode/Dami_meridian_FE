@@ -3,7 +3,8 @@ import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { ChevronDown, CircleAlert, ImagePlus, LoaderCircle, Trash2, X } from 'lucide-react'
 import Swal from 'sweetalert2'
 
-import { addProduct, ApiError, editProduct } from '@/lib/api'
+import { useProductMutations } from '@/hooks/mutations/useProductMutations'
+import { ApiError } from '@/lib/api'
 import { COLLECTIONS } from '@/lib/collections'
 import type { CollectionId } from '@/lib/collections'
 import { cn } from '@/lib/utils'
@@ -137,12 +138,13 @@ export default function AdminProductForm({
   const priceRef = useRef<HTMLInputElement>(null)
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
 
+  const { createProduct, updateProduct } = useProductMutations()
+
   const [form, setForm] = useState<FormState>(() => productToForm(product))
   const [images, setImages] = useState<(string | File)[]>(() =>
     product?.images ? [...product.images] : [],
   )
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [isSaving, setIsSaving] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [previewUrls, setPreviewUrls] = useState<Map<File, string>>(
     () => new Map(),
@@ -156,6 +158,9 @@ export default function AdminProductForm({
 
   const editingId = product?.id
   const isEdit = Boolean(editingId)
+  // The save button follows the mutation that is actually running, so the
+  // form never shows a spinner for a write that is not in flight.
+  const isSaving = isEdit ? updateProduct.isPending : createProduct.isPending
 
   // Re-seed only when the product identity changes. Depending on the whole
   // object would wipe in-progress edits every time the parent re-renders.
@@ -348,12 +353,13 @@ export default function AdminProductForm({
       images,
     }
 
-    setIsSaving(true)
     try {
+      // The mutations are the only network write; everything else here stays
+      // local state, so a failed save leaves the form exactly as it was.
       if (editingId) {
-        await editProduct(editingId, payload)
+        await updateProduct.mutateAsync({ id: editingId, product: payload })
       } else {
-        await addProduct(payload)
+        await createProduct.mutateAsync(payload)
       }
 
       Swal.mixin({
@@ -386,8 +392,6 @@ export default function AdminProductForm({
         title: 'Could not save product',
         text: message,
       })
-    } finally {
-      setIsSaving(false)
     }
   }
 

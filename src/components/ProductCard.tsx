@@ -57,7 +57,9 @@ export default function ProductCard({
         {primaryImage && failedImage !== primaryImage ? (
           <img
             src={primaryImage}
-            alt={product.name}
+            // Describes the garment rather than repeating the <h3> below:
+            // "DAMI Silk Wrap Dress — Women's T-Shirts".
+            alt={`${product.name} — ${collectionName}`}
             loading="lazy"
             decoding="async"
             onError={() => setFailedImage(primaryImage)}

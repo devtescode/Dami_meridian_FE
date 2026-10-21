@@ -4,7 +4,7 @@ import { ArrowLeft, Check, Copy, PackageSearch, RefreshCw } from 'lucide-react'
 
 import AdminProductForm from '@/components/admin/AdminProductForm'
 
-import { ApiError, getProduct } from '@/lib/api'
+import { useProductQuery } from '@/hooks/queries/useProductQuery'
 import { toImageArray } from '@/lib/productImages'
 import type { AdminFormProduct, Product } from '@/types/product'
 
@@ -59,64 +59,43 @@ export default function AdminEditProductPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
 
-  const [state, setState] = useState<LoadState>('loading')
-  const [product, setProduct] = useState<Product | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  // Bumped by "Try again" to re-run the effect without changing the id.
-  const [attempt, setAttempt] = useState(0)
-
   const isValidId = OBJECT_ID_PATTERN.test(id)
 
-  useEffect(() => {
-    // A malformed URL never reaches the network: no request, no 404 guessing.
-    if (!isValidId) {
-      setProduct(null)
-      setState('notFound')
-      return
-    }
+  // A malformed URL never reaches the network: no request, no 404 guessing.
+  const {
+    product,
+    isError,
+    isLoading,
+    status,
+    error: loadError,
+    refetch,
+  } = useProductQuery(isValidId ? id : null)
 
-    let cancelled = false
-    setState('loading')
-    setLoadError(null)
-
-    getProduct(id)
-      .then((data) => {
-        if (cancelled) return
-        setProduct(data)
-        setState('ready')
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        // 400 (bad reference) and 404 (deleted product) are the same screen
-        // for the admin: the product is not here.
-        if (
-          err instanceof ApiError &&
-          (err.status === 400 || err.status === 404)
-        ) {
-          setState('notFound')
-          return
-        }
-        setLoadError(
-          err instanceof Error
-            ? err.message
-            : 'Could not load this product. Please try again.',
-        )
-        setState('error')
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [id, isValidId, attempt])
+  /**
+   * 400 (bad reference) and 404 (deleted product) are the same screen for the
+   * admin: the product is not here. A request that is still in flight shows
+   * the skeleton again, so a retry never leaves a stale error on screen.
+   */
+  const state: LoadState =
+    !isValidId || status === 400 || status === 404
+      ? 'notFound'
+      : isError && !isLoading
+        ? 'error'
+        : product
+          ? 'ready'
+          : 'loading'
 
   // Briefly swaps the Copy icon for a Check after a successful copy.
-  const [copied, setCopied] = useState(false)
+  // A tick (not a boolean): a repeat copy retriggers the state and restarts
+  // the confirmation window instead of no-oping on an unchanged value.
+  const [copyTick, setCopyTick] = useState(0)
+  const copied = copyTick > 0
 
   useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1500)
+    if (copyTick === 0) return
+    const timer = window.setTimeout(() => setCopyTick(0), 1500)
     return () => window.clearTimeout(timer)
-  }, [copied])
+  }, [copyTick])
 
   const referenceId = product?._id
 
@@ -145,7 +124,7 @@ export default function AdminEditProductPage() {
       }
     }
 
-    if (copiedOk) setCopied(true)
+    if (copiedOk) setCopyTick((value) => value + 1)
   }
 
   const mapped = product ? toFormProduct(product) : null
@@ -166,7 +145,9 @@ export default function AdminEditProductPage() {
           Edit Product
         </h1>
         <div className="rule-gold mt-4 w-28" aria-hidden="true" />
-        {product ? (
+        {/* Gated on 'ready' so a stale product never shows its header or
+            reference row while a different id (or a retry) is loading. */}
+        {state === 'ready' && product ? (
           <div className="mt-4">
             <p className="text-sm text-muted-foreground">
               Editing{' '}
@@ -188,7 +169,7 @@ export default function AdminEditProductPage() {
                   onClick={() => void copyReference(referenceId)}
                   aria-label={`Copy reference for ${product.name}`}
                   title="Copy reference"
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 >
                   {copied ? (
                     <Check className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -199,9 +180,12 @@ export default function AdminEditProductPage() {
               </div>
             ) : null}
 
-            {/* Kept mounted so repeated copies re-announce. */}
+            {/* Kept mounted so repeated copies re-announce; the tick keeps the
+                text unique so each copy within the window announces again. */}
             <p aria-live="polite" className="sr-only">
-              {copied ? 'Reference copied' : ''}
+              {copied
+                ? `Reference copied${copyTick > 1 ? ` (copy ${copyTick})` : ''}`
+                : ''}
             </p>
           </div>
         ) : null}
@@ -244,7 +228,7 @@ export default function AdminEditProductPage() {
           <div className="flex shrink-0 flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => setAttempt((value) => value + 1)}
+              onClick={() => void refetch()}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-destructive/50 px-4 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />

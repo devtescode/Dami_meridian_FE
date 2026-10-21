@@ -11,13 +11,15 @@
  * through router state (`state.notice`), which surfaces it above the form.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode, RefObject } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react'
 
+import { useAdminRegisterMutation } from '@/hooks/mutations/useAuthMutations'
+import { useAdminStatusQuery } from '@/hooks/queries/useAdminStatusQuery'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { ApiError, adminRegister, getAdminStatus } from '@/lib/api'
+import { ApiError } from '@/lib/api'
 import { BRAND } from '@/lib/brand'
 import { isSessionValid } from '@/lib/session'
 
@@ -281,7 +283,10 @@ function RegisterForm({ onRegistered }: RegisterFormProps) {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   // A 400 "Admin already exists" means someone else won the race — offer login.
   const [adminExistsError, setAdminExistsError] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // The mutation owns the in-flight state; the form only owns its inputs.
+  const registerMutation = useAdminRegisterMutation()
+  const isSubmitting = registerMutation.isPending
 
   const passwordRef = useRef<HTMLInputElement>(null)
   // Bumped on every failed length check to trigger the focus effect;
@@ -311,22 +316,24 @@ function RegisterForm({ onRegistered }: RegisterFormProps) {
       return
     }
 
-    setIsSubmitting(true)
-
     try {
-      const data = await adminRegister(fullName.trim(), email.trim(), password)
+      const data = await registerMutation.mutateAsync({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+      })
       onRegistered(
         data.message || 'Account created. Sign in with your new credentials.',
       )
     } catch (err) {
+      // `mutateAsync` rejects with the API failure, so the wording below is
+      // the backend's own.
       setError(describeError(err, 'Unable to create the admin account.'))
       setAdminExistsError(
         err instanceof ApiError &&
           err.status === 400 &&
           /already exists/i.test(err.message),
       )
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -414,33 +421,17 @@ export default function AdminRegisterPage() {
   const navigate = useNavigate()
   usePageTitle('Admin Registration')
 
-  const [adminExists, setAdminExists] = useState<boolean | null>(null)
-  const [statusError, setStatusError] = useState<string | null>(null)
-  const [isBooting, setIsBooting] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const {
+    adminExists,
+    isLoading,
+    error: statusError,
+    refetch: refetchStatus,
+  } = useAdminStatusQuery()
 
-  const checkStatus = useCallback(async (): Promise<void> => {
-    setStatusError(null)
-    try {
-      const status = await getAdminStatus()
-      setAdminExists(status.adminExists)
-    } catch (error) {
-      setStatusError(describeError(error, 'Could not verify the admin account.'))
-    }
-  }, [])
-
-  useEffect(() => {
-    // An authenticated admin is on its way to the dashboard — skip the lookup.
-    if (isSessionValid()) return
-
-    let active = true
-    void checkStatus().finally(() => {
-      if (active) setIsBooting(false)
-    })
-    return () => {
-      active = false
-    }
-  }, [checkStatus])
+  // The boot screen covers the lookup while there is no answer yet — the very
+  // first request and any retry after a failure. A refresh over an answer we
+  // already hold leaves the screen that is on display alone.
+  const isBooting = isLoading && adminExists === null && statusError === null
 
   const handleRegistered = (message: string) => {
     // An admin now exists — registration closes and login takes over,
@@ -449,8 +440,7 @@ export default function AdminRegisterPage() {
   }
 
   const handleRetryStatus = () => {
-    setIsRefreshing(true)
-    void checkStatus().finally(() => setIsRefreshing(false))
+    refetchStatus()
   }
 
   // Already signed in → straight to the protected dashboard.
@@ -484,10 +474,10 @@ export default function AdminRegisterPage() {
             <button
               type="button"
               onClick={handleRetryStatus}
-              disabled={isRefreshing}
+              disabled={isLoading}
               className="mt-2 inline-flex min-h-11 items-center gap-2 text-sm text-gold-light underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
             >
-              {isRefreshing && (
+              {isLoading && (
                 <Loader2 size={14} className="animate-spin" aria-hidden="true" />
               )}
               Try again

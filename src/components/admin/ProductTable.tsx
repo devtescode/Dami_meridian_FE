@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ImageOff, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Check, Copy, Eye, ImageOff, Package, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 
 import { formatNaira } from '@/lib/brand'
 import { COLLECTIONS, getCollectionName, resolveCollectionId } from '@/lib/collections'
@@ -21,6 +22,16 @@ const SEARCH_DEBOUNCE_MS = 200
 /** Maximum number of thumbnails shown before the "+N" overflow chip. */
 const MAX_THUMBS = 3
 
+/** How long a row's copy feedback (Check icon + announcement) lingers. */
+const COPY_FEEDBACK_MS = 1500
+
+/**
+ * Brief blank beat before the feedback shows. A repeat copy of the same row
+ * passes through it again, so the icon visibly re-flips and the live region
+ * sees a text change (empty → "Reference copied") and re-announces.
+ */
+const COPY_RESET_MS = 100
+
 /** Thumbnail box sizes, held as literal class strings. */
 const THUMB_BOX_CLASS: Record<'sm' | 'lg', string> = {
   sm: 'h-10 w-10',
@@ -37,6 +48,16 @@ function resolveCollection(product: Product): string {
 
 function productKey(product: Product, index: number): string {
   return product._id ?? (product.id !== undefined ? String(product.id) : `${product.name}-${index}`)
+}
+
+/**
+ * The Mongo reference used for the copy action and the lookup link.
+ * Returns `undefined` when a record has neither `_id` nor `id`, in which
+ * case both row actions are hidden — there is nowhere to navigate and
+ * nothing meaningful to copy.
+ */
+function referenceId(product: Product): string | undefined {
+  return product._id ?? product.id
 }
 
 interface ThumbStackProps {
@@ -128,6 +149,83 @@ export default function ProductTable({
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [search])
+
+  // Per-row copy feedback: reference -> { expiry, shown }. Each copy lands in
+  // a short reset (Copy icon, empty live region) before the Check feedback
+  // shows — that reset is what lets a repeat copy of the same row re-flip the
+  // icon and re-announce — and every row expires on its own 1.5s window, so
+  // copying two rows keeps both checkmarks until each one lapses.
+  const [copies, setCopies] = useState<Record<string, { exp: number; shown: boolean }>>({})
+
+  useEffect(() => {
+    const entries = Object.entries(copies)
+    if (entries.length === 0) return
+
+    // Reset phase: hold the blank beat, then flip every fresh copy to "shown".
+    if (entries.some(([, feedback]) => !feedback.shown)) {
+      const reset = window.setTimeout(() => {
+        setCopies((prev) => {
+          const next = { ...prev }
+          for (const ref of Object.keys(next)) {
+            if (!next[ref].shown) next[ref] = { ...next[ref], shown: true }
+          }
+          return next
+        })
+      }, COPY_RESET_MS)
+      return () => window.clearTimeout(reset)
+    }
+
+    // Shown phase: wake at the earliest expiry and drop every row whose own
+    // window has lapsed (a new object always restarts this effect, so an
+    // impossibly-early timer simply reschedules instead of getting stuck).
+    const timer = window.setTimeout(() => {
+      const now = Date.now()
+      setCopies((prev) =>
+        Object.fromEntries(
+          Object.entries(prev).filter(([, feedback]) => feedback.exp > now),
+        ),
+      )
+    }, Math.max(0, Math.min(...entries.map(([, feedback]) => feedback.exp)) - Date.now()))
+    return () => window.clearTimeout(timer)
+  }, [copies])
+
+  // Copies a product's reference, with a hidden-textarea fallback for
+  // browsers/contexts where the async Clipboard API is unavailable.
+  async function copyReference(product: Product) {
+    const value = referenceId(product)
+    if (!value) return
+
+    let copiedOk = false
+
+    try {
+      await navigator.clipboard.writeText(value)
+      copiedOk = true
+    } catch {
+      // Clipboard API unavailable (insecure context, denied permission, …):
+      // fall back to a hidden textarea + deprecated execCommand.
+      try {
+        const textarea = document.createElement('textarea')
+        textarea.value = value
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.top = '-9999px'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        copiedOk = document.execCommand('copy')
+        document.body.removeChild(textarea)
+      } catch {
+        copiedOk = false
+      }
+    }
+
+    if (copiedOk) {
+      setCopies((prev) => ({
+        ...prev,
+        [value]: { exp: Date.now() + COPY_FEEDBACK_MS, shown: false },
+      }))
+    }
+  }
 
   const filtered = useMemo(() => {
     const needle = debouncedSearch.trim().toLowerCase()
@@ -300,108 +398,174 @@ export default function ProductTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((product, index) => (
-                  <tr
-                    key={productKey(product, index)}
-                    className="transition-colors hover:bg-surface-2/70"
-                  >
-                    <td className="px-4 py-3 align-middle">
-                      <ThumbStack images={toImageArray(product.imageURLs)} />
-                    </td>
-                    <td className="max-w-[18rem] px-4 py-3 align-middle">
-                      <p
-                        title={product.name}
-                        className="truncate text-sm font-medium text-foreground"
-                      >
-                        {product.name}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 align-middle text-sm text-muted-foreground">
-                      {getCollectionName(product.collection)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 align-middle text-sm font-medium text-primary">
-                      {formatNaira(product.price)}
-                    </td>
-                    <td className="px-4 py-3 align-middle">
-                      <AvailabilityPill category={product.category} />
-                    </td>
-                    <td className="px-4 py-3 align-middle">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(product)}
-                          aria-label={`Edit ${product.name}`}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                {filtered.map((product, index) => {
+                  const ref = referenceId(product)
+                  const copied = ref !== undefined && copies[ref]?.shown === true
+
+                  return (
+                    <tr
+                      key={productKey(product, index)}
+                      className="transition-colors hover:bg-surface-2/70"
+                    >
+                      <td className="px-4 py-3 align-middle">
+                        <ThumbStack images={toImageArray(product.imageURLs)} />
+                      </td>
+                      <td className="max-w-[18rem] px-4 py-3 align-middle">
+                        <p
+                          title={product.name}
+                          className="truncate text-sm font-medium text-foreground"
                         >
-                          <Pencil className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(product)}
-                          aria-label={`Delete ${product.name}`}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-destructive/40 text-destructive transition-colors hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {product.name}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-middle text-sm text-muted-foreground">
+                        {getCollectionName(product.collection)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 align-middle text-sm font-medium text-primary">
+                        {formatNaira(product.price)}
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <AvailabilityPill category={product.category} />
+                      </td>
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(product)}
+                            aria-label={`Edit ${product.name}`}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(product)}
+                            aria-label={`Delete ${product.name}`}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-destructive/40 text-destructive transition-colors hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          {ref ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void copyReference(product)}
+                                aria-label={`Copy reference for ${product.name}`}
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                              >
+                                {copied ? (
+                                  <Check className="h-4 w-4 text-primary" aria-hidden="true" />
+                                ) : (
+                                  <Copy className="h-4 w-4" aria-hidden="true" />
+                                )}
+                              </button>
+                              <Link
+                                to={`/admin/products/lookup?ref=${ref}`}
+                                aria-label={`Look up ${product.name} by reference`}
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                              >
+                                <Eye className="h-4 w-4" aria-hidden="true" />
+                              </Link>
+                            </>
+                          ) : null}
+                        </div>
+                        {/* Kept mounted so repeated copies re-announce. */}
+                        <p role="status" aria-live="polite" className="sr-only">
+                          {copied ? 'Reference copied' : ''}
+                        </p>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile: a stacked card list — a squeezed table is unusable here. */}
           <ul className="mt-5 space-y-3 md:hidden">
-            {filtered.map((product, index) => (
-              <li
-                key={productKey(product, index)}
-                className="card-luxury rounded-xl p-4"
-              >
-                <div className="flex items-start gap-3">
-                  <ThumbStack
-                    images={toImageArray(product.imageURLs)}
-                    size="lg"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 break-words text-sm font-medium text-foreground">
-                      {product.name}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {getCollectionName(product.collection)}
-                    </p>
+            {filtered.map((product, index) => {
+              const ref = referenceId(product)
+              const copied = ref !== undefined && copies[ref]?.shown === true
+
+              return (
+                <li
+                  key={productKey(product, index)}
+                  className="card-luxury rounded-xl p-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <ThumbStack
+                      images={toImageArray(product.imageURLs)}
+                      size="lg"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 break-words text-sm font-medium text-foreground">
+                        {product.name}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {getCollectionName(product.collection)}
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                  <span className="font-display text-lg text-primary">
-                    {formatNaira(product.price)}
-                  </span>
-                  <AvailabilityPill category={product.category} />
-                </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <span className="font-display text-lg text-primary">
+                      {formatNaira(product.price)}
+                    </span>
+                    <AvailabilityPill category={product.category} />
+                  </div>
 
-                <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(product)}
-                    aria-label={`Edit ${product.name}`}
-                    className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-border text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(product)}
-                    aria-label={`Delete ${product.name}`}
-                    className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-destructive/40 text-sm text-destructive transition-colors hover:bg-destructive/10"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={() => onEdit(product)}
+                      aria-label={`Edit ${product.name}`}
+                      className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-border text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(product)}
+                      aria-label={`Delete ${product.name}`}
+                      className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-destructive/40 text-sm text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      Delete
+                    </button>
+                    {ref ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void copyReference(product)}
+                          aria-label={`Copy reference for ${product.name}`}
+                          className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-border text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                        >
+                          {copied ? (
+                            <Check className="h-4 w-4 text-primary" aria-hidden="true" />
+                          ) : (
+                            <Copy className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          Copy
+                        </button>
+                        <Link
+                          to={`/admin/products/lookup?ref=${ref}`}
+                          aria-label={`Look up ${product.name} by reference`}
+                          className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-border text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                        >
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                          View
+                        </Link>
+                      </>
+                    ) : null}
+                  </div>
+                  {/* Kept mounted so repeated copies re-announce. */}
+                  <p role="status" aria-live="polite" className="sr-only">
+                    {copied ? 'Reference copied' : ''}
+                  </p>
+                </li>
+              )
+            })}
           </ul>
         </>
       )}

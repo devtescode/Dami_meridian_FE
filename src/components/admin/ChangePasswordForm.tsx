@@ -2,7 +2,8 @@ import { useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Eye, EyeOff, KeyRound } from 'lucide-react'
 import Swal from 'sweetalert2'
 
-import { adminChangePassword, ApiError } from '@/lib/api'
+import { useChangePasswordMutation } from '@/hooks/mutations/useAuthMutations'
+import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 /** Minimum length the backend expects for a new password. */
@@ -155,7 +156,10 @@ export default function ChangePasswordForm() {
   })
   const [hasAttempted, setHasAttempted] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // The mutation owns the in-flight state; the form only owns its inputs.
+  const changePasswordMutation = useChangePasswordMutation()
+  const isSubmitting = changePasswordMutation.isPending
 
   const fieldRefs = {
     currentPassword: useRef<HTMLInputElement>(null),
@@ -198,12 +202,11 @@ export default function ChangePasswordForm() {
       return
     }
 
-    setIsSubmitting(true)
     try {
-      const result = await adminChangePassword(
-        values.currentPassword,
-        values.newPassword,
-      )
+      const result = await changePasswordMutation.mutateAsync({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+      })
 
       Swal.mixin({
         toast: true,
@@ -240,8 +243,6 @@ export default function ChangePasswordForm() {
           : 'Could not update your password. Please try again.',
       )
       fieldRefs.currentPassword.current?.focus()
-    } finally {
-      setIsSubmitting(false)
     }
   }
 

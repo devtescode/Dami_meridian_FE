@@ -187,7 +187,17 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    overflow-x: hidden;
+    /* `clip` suppresses horizontal panning (e.g. a closed -translate-x-full
+       drawer) without turning the body into a scroll container, which is what
+       breaks `position: sticky` on the nav and admin header. The fallback
+       below keeps older browsers from scrolling sideways. */
+    overflow-x: clip;
+  }
+
+  @supports not (overflow-x: clip) {
+    body {
+      overflow-x: hidden;
+    }
   }
 
   /* Prevent layout shift / clipping from long unbroken words */
@@ -416,12 +426,13 @@
    Values mirror the admin palette tokens in @theme: surface #141414,
    border #676767, gold #c8a24a, muted text #b7b7b7, page #0b0b0f.
    ========================================================================== */
+/* !important: sweetalert2 injects its <style> after this stylesheet in prod builds, so its defaults would otherwise win the cascade on equal specificity. */
 .swal2-popup {
   background: #141414;
   border: 1px solid #676767;
   border-radius: 1rem;
   color: #ffffff;
-  max-width: calc(100vw - 2rem);
+  max-width: calc(100vw - 2rem) !important;
 }
 
 .swal2-title {
@@ -451,7 +462,7 @@
    read fine on the dark surface — only the backdrop needs deepening so the
    dialog stays the focus. */
 .swal2-container {
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.6) !important;
 }
 
 .swal2-timer-progress-bar {
@@ -462,6 +473,6 @@
    gold ring for keyboard users. */
 .swal2-popup button:focus-visible,
 .swal2-popup input:focus-visible {
-  outline: 2px solid #c8a24a;
-  outline-offset: 2px;
+  outline: 2px solid #c8a24a !important;
+  outline-offset: 2px !important;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
@@ -10,8 +10,10 @@ import {
   X,
 } from 'lucide-react'
 import ProductCard from '@/components/ProductCard'
+import Pagination from '@/components/Pagination'
 import { Section } from '@/components/Section'
-import { useProducts } from '@/hooks/useProducts'
+import { useProductPageQuery } from '@/hooks/queries/useProductPageQuery'
+import type { ProductSort } from '@/lib/api'
 import {
   COLLECTIONS,
   COLLECTION_IDS,
@@ -22,27 +24,35 @@ import type { Product } from '@/types/product'
 type FilterId = 'all' | CollectionId
 type SortId = 'featured' | 'price-asc' | 'price-desc' | 'name-asc'
 
+/**
+ * The sort options the visitor sees. `featured` is the default ordering and
+ * maps onto the backend's `newest` — the catalogue is always served
+ * newest-first, so it is the same thing the storefront used to call "featured".
+ */
 const SORT_LABELS: Record<SortId, string> = {
-  featured: 'Featured',
+  featured: 'Newest',
   'price-asc': 'Price: Low to High',
   'price-desc': 'Price: High to Low',
   'name-asc': 'Name: A–Z',
 }
 
+/**
+ * Translation table from the visitor-facing sort id to the ordering the
+ * backend understands. The API client validates this value against a fixed
+ * allow-list, so an unknown key would be rejected with a 400.
+ */
+const SERVER_SORT: Record<SortId, ProductSort> = {
+  featured: 'newest',
+  'price-asc': 'price-asc',
+  'price-desc': 'price-desc',
+  'name-asc': 'name-asc',
+}
+
+/** Products shown per page. The backend's own default matches this. */
+const DEFAULT_PAGE_SIZE = 6
+
 const CHIP_BASE =
   'min-h-[44px] whitespace-nowrap rounded-full border px-4 py-2 text-xs uppercase tracking-[0.14em] transition-colors duration-300'
-
-/**
- * Pre-rebrand records carry no `collection` field. The backend treats them as
- * jewellery, so the storefront does the same to keep filters and labels in
- * agreement.
- */
-function resolveCollection(product: Product): CollectionId {
-  const id = product.collection
-  if (!id) return 'jewellery'
-  const match = COLLECTIONS.find((collection) => collection.id === id)
-  return match ? match.id : 'jewellery'
-}
 
 /** Reads `?collection=` into a known id, or null when absent/unknown. */
 function parseCollectionParam(raw: string | null): CollectionId | null {
@@ -65,13 +75,17 @@ function numericPrice(product: Product): number | null {
   return Number.isFinite(value) ? value : null
 }
 
-function ProductSkeleton() {
+/**
+ * Loading placeholder for the grid. It renders exactly as many cards as the
+ * page holds, so the layout does not jump when the real grid lands.
+ */
+function ProductSkeleton({ count = DEFAULT_PAGE_SIZE }: { count?: number }) {
   return (
     <div
       className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 lg:gap-8"
       aria-hidden="true"
     >
-      {Array.from({ length: 6 }).map((_, index) => (
+      {Array.from({ length: count }).map((_, index) => (
         <div key={index} className="card-luxury overflow-hidden rounded-2xl">
           <div className="aspect-[4/5] w-full animate-pulse bg-surface-2" />
           <div className="space-y-3 p-4 sm:p-5">
@@ -93,13 +107,21 @@ export interface ShopProps {
    * Hides the section's own eyebrow/heading/description/gold-rule block when
    * the host page already renders a page header (e.g. `/shop`), so the two
    * headers never stack. Everything else — search, sort, chips, counts,
-   * skeletons, states, grid — renders unchanged.
+   * skeletons, states, grid, pagination — renders unchanged.
    */
   hideHeader?: boolean
+  /**
+   * Products per page. Defaults to 6, which is also the backend's default
+   * page size. The API caps a request at 60 products per page.
+   */
+  pageSize?: number
 }
 
-export default function Shop({ onProductClick, hideHeader = false }: ShopProps) {
-  const { products, isLoading, error, refetch } = useProducts()
+export default function Shop({
+  onProductClick,
+  hideHeader = false,
+  pageSize = DEFAULT_PAGE_SIZE,
+}: ShopProps) {
   const navigate = useNavigate()
 
   /** The URL is the source of truth for the collection and search filters. */
@@ -108,71 +130,160 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
   const activeFilter: FilterId =
     parseCollectionParam(searchParams.get('collection')) ?? 'all'
 
-  const [searchInput, setSearchInput] = useState(
-    () => searchParams.get('q') ?? '',
-  )
-  const [searchTerm, setSearchTerm] = useState(
+  /** Raw `?q=` exactly as it appears in the URL. */
+  const urlQuery = searchParams.get('q') ?? ''
+
+  /**
+   * The committed search term is DERIVED from the URL, never stored: state
+   * and URL cannot drift apart because there is only one of them. Every
+   * filter/sort/count below reads this value.
+   */
+  const searchTerm = useMemo(
     () => (searchParams.get('q') ?? '').trim().toLowerCase(),
+    [searchParams],
   )
+
+  /** The only search state: what the visitor sees in the input box. */
+  const [searchInput, setSearchInput] = useState(() => urlQuery)
   const [sort, setSort] = useState<SortId>('featured')
 
-  // Debounce the search so typing does not re-filter the grid on every keystroke.
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSearchTerm(searchInput.trim().toLowerCase())
-    }, 200)
-    return () => window.clearTimeout(timer)
-  }, [searchInput])
+  /** The page currently being viewed (1-based). */
+  const [page, setPage] = useState(1)
 
-  const urlQuery = searchParams.get('q') ?? ''
+  /**
+   * Reset to page 1 whenever the query, the collection or the ordering
+   * changes — a page 4 that no longer exists would otherwise show an empty
+   * grid.
+   *
+   * The comparison happens during render (React's documented "adjust state
+   * when a prop changes" pattern) rather than in an effect: the page is
+   * already corrected before the data request is issued, so the backend is
+   * never asked for a stale page number.
+   */
+  const filterKey = `${searchTerm}|${activeFilter}|${sort}`
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey)
+    setPage(1)
+  }
+
+  /**
+   * The catalogue is fetched a page at a time — search, collection and
+   * ordering are all applied by the backend, so the browser only ever holds
+   * the products of the current page.
+   *
+   * The page, page size, search term, collection and ordering are part of
+   * the query key, so a page already visited is served from the cache
+   * without a request, and two views of the same page share one request.
+   */
+  const {
+    products,
+    total,
+    page: serverPage,
+    clampedPage,
+    totalPages,
+    isLoading,
+    error,
+    refetch,
+  } = useProductPageQuery({
+    page,
+    limit: pageSize,
+    q: searchTerm,
+    collection: activeFilter === 'all' ? null : activeFilter,
+    sort: SERVER_SORT[sort],
+  })
+
+  /**
+   * The backend clamps a request for a page past the end of the collection
+   * down to the last page. Adopting the page the server actually served
+   * keeps the controls and the URL honest — e.g. after the last product is
+   * deleted, the grid follows the catalogue to its new final page.
+   *
+   * `clampedPage` is null while the previous page is still on screen, so
+   * this can never snap the grid back a page.
+   */
+  useEffect(() => {
+    if (clampedPage !== null && clampedPage !== page) setPage(clampedPage)
+  }, [clampedPage, page])
 
   /**
    * Adopt a `?q=` written from outside the input. The nav bar navigates to
    * `/shop?q=…` even when this component is already mounted — the state
-   * initialisers above only run once — so without this the grid would keep
-   * filtering on the previous term while the URL advertised a new one. The
-   * equality guard stops the effect from undoing the visitor's own typing:
-   * the debounced write-back below always lands on exactly this value.
+   * initialiser above only runs once — so without this the input would keep
+   * showing the previous term while the URL advertised a new one. One-way
+   * contract: URL → input, and it sets ONLY `searchInput` (the committed
+   * term already lives in the URL). The normalized-equality guard means it
+   * never rewrites the box over case/whitespace differences, so a URL that
+   * is already committed can never bounce back through this effect.
    */
   useEffect(() => {
     if (searchInput.trim().toLowerCase() === urlQuery.trim().toLowerCase()) {
       return
     }
     setSearchInput(urlQuery)
-    setSearchTerm(urlQuery.trim().toLowerCase())
   }, [urlQuery])
 
   /**
-   * Mirror the debounced term into `?q=` so filtered searches stay shareable.
+   * Debounced write-back into `?q=` so filtered searches stay shareable, and
+   * so typing does not re-filter the grid on every keystroke. One-way
+   * contract: input → URL. This is the only code that ever writes `?q=`.
+   *
+   * `setSearchParams` calls `navigate()` even when its updater returns
+   * `previous` unchanged, so the guard at the top exits BEFORE scheduling a
+   * timer whenever the input already normalizes to the committed term — an
+   * equal value therefore causes zero navigation, not even a no-op one. That
+   * top-of-effect guard is the only place the LIVE URL is read: it compares
+   * against `searchTerm`, which this render derived from the current
+   * `searchParams`. The guard inside the updater is NOT a live re-check —
+   * react-router invokes it as `nextInit(previous)`, where `previous` is the
+   * `searchParams` captured in this render's `setSearchParams` useCallback
+   * closure, i.e. the very copy the top guard already tested. It is kept
+   * purely as a defensive idempotency belt for the closure-stale case
+   * (the debounce timer firing after the URL was changed elsewhere in the
+   * meantime). Writes therefore only ever happen when a normalized value
+   * actually changed, and each write makes the two sides equal, so nothing
+   * can ever write as a reaction to its own write.
+   *
+   * `searchParams`/`searchTerm` are intentionally not deps: the body only
+   * writes when the values DIFFER, which makes the effect idempotent
+   * regardless of which render's copy of the URL the closure captured.
    * `replace` keeps keystrokes out of the history stack — Back still works
    * between collections, which push their own entries.
    */
   useEffect(() => {
-    setSearchParams(
-      (previous) => {
-        if ((previous.get('q') ?? '').trim().toLowerCase() === searchTerm) {
-          return previous
-        }
-        const next = new URLSearchParams(previous)
-        if (searchTerm) next.set('q', searchTerm)
-        else next.delete('q')
-        return next
-      },
-      { replace: true },
-    )
-  }, [searchTerm, setSearchParams])
+    const nextTerm = searchInput.trim().toLowerCase()
+    if (nextTerm === searchTerm) return
+    // Debounce the write so the URL (and grid) settle after typing pauses.
+    const timer = window.setTimeout(() => {
+      setSearchParams(
+        (previous) => {
+          // Belt-and-braces, NOT a live re-check: `previous` is the params
+          // captured in this render's `setSearchParams` closure — the same
+          // copy the top-of-effect guard already tested.
+          if ((previous.get('q') ?? '').trim().toLowerCase() === nextTerm) {
+            return previous
+          }
+          const next = new URLSearchParams(previous)
+          if (nextTerm) next.set('q', nextTerm)
+          else next.delete('q')
+          return next
+        },
+        { replace: true },
+      )
+    }, 200)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
 
-  /** Collection chips write `?collection=`, pushing a history entry each time. */
+  /**
+   * Collection chips write `?collection=`, pushing a history entry per real
+   * change; re-selecting the already-active chip navigates nowhere.
+   */
   const selectCollection = (id: FilterId) => {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous)
-        if (id === 'all') next.delete('collection')
-        else next.set('collection', id)
-        return next
-      },
-      { replace: false },
-    )
+    const next = new URLSearchParams(searchParams)
+    if (id === 'all') next.delete('collection')
+    else next.set('collection', id)
+    if (next.toString() === searchParams.toString()) return
+    setSearchParams(next, { replace: false })
   }
 
   const handleProductClick = (product: Product) => {
@@ -185,60 +296,63 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
     navigate(`/products/${id}`)
   }
 
-  const hasNumericPrice = useMemo(
-    () => products.some((product) => numericPrice(product) !== null),
-    [products],
-  )
-
-  // Price sorting is only meaningful once the catalogue exposes numeric prices.
+  /**
+   * Price ordering is only offered once the catalogue actually exposes
+   * readable prices. The flag LATCHES: a page that happens to contain no
+   * priced product must not make the option disappear while the visitor is
+   * on another page.
+   */
+  const [hasNumericPrice, setHasNumericPrice] = useState(false)
   useEffect(() => {
-    if (!hasNumericPrice && sort !== 'featured') setSort('featured')
-  }, [hasNumericPrice, sort])
-
-  const visibleProducts = useMemo(() => {
-    const filtered = products.filter((product) => {
-      const matchesCollection =
-        activeFilter === 'all' || resolveCollection(product) === activeFilter
-      if (!matchesCollection) return false
-
-      if (!searchTerm) return true
-
-      const haystack = `${String(product.name)} ${String(
-        product.description ?? '',
-      )}`.toLowerCase()
-      return haystack.includes(searchTerm)
-    })
-
-    if (sort === 'featured') return filtered
-
-    const sorted = [...filtered]
-    if (sort === 'name-asc') {
-      sorted.sort((a, b) =>
-        String(a.name).localeCompare(String(b.name), 'en', {
-          sensitivity: 'base',
-        }),
-      )
-    } else {
-      sorted.sort((a, b) => {
-        const priceA = numericPrice(a)
-        const priceB = numericPrice(b)
-        // Pieces without a readable price always sink to the bottom.
-        if (priceA === null && priceB === null) return 0
-        if (priceA === null) return 1
-        if (priceB === null) return -1
-        return sort === 'price-asc' ? priceA - priceB : priceB - priceA
-      })
+    if (products.some((product) => numericPrice(product) !== null)) {
+      setHasNumericPrice(true)
     }
-    return sorted
-  }, [products, activeFilter, searchTerm, sort])
+  }, [products])
+
+  // Fall back to the default ordering while the catalogue exposes no prices.
+  useEffect(() => {
+    if (isLoading) return
+    if (!hasNumericPrice && sort !== 'featured') setSort('featured')
+  }, [hasNumericPrice, sort, isLoading])
+
+  /** Scroll target for a page change — the filter bar, just above the grid. */
+  const controlsRef = useRef<HTMLDivElement>(null)
+
+  const handlePageChange = (next: number) => {
+    if (next === page) return
+    setPage(next)
+    // Bring the visitor back to the top of the results rather than leaving
+    // them at the bottom of the previous page. `scroll-mt` clears the
+    // sticky navigation bar.
+    controlsRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
+
+  /**
+   * The skeleton is only for a grid with nothing to show.
+   *
+   * While the next page loads, the previous page stays on screen (React
+   * Query's `keepPreviousData`), so the grid must NOT collapse into
+   * skeletons on a page change — only a cold, empty first load does.
+   */
+  const showSkeleton = isLoading && products.length === 0
 
   const filtersActive =
     activeFilter !== 'all' || searchTerm.length > 0 || sort !== 'featured'
 
+  /** A collection or a search term actually narrows the result set. */
+  const hasNarrowingFilter = activeFilter !== 'all' || searchTerm.length > 0
+
   const clearFilters = () => {
-    setSearchParams({}, { replace: false })
+    // Clear the URL only when there is something to clear — `setSearchParams`
+    // navigates unconditionally, and an equal-value push would be noise.
+    const next = new URLSearchParams()
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: false })
+    }
     setSearchInput('')
-    setSearchTerm('')
     setSort('featured')
   }
 
@@ -266,7 +380,10 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
               'Premium t-shirts, joggers, fragrances and jewellery — every piece selected to carry identity. Filter the catalogue, find your fit, and order directly on WhatsApp.',
           })}
     >
-      <div className="mb-10 flex flex-col gap-5 lg:mb-12">
+      <div
+        ref={controlsRef}
+        className="mb-10 flex scroll-mt-24 flex-col gap-5 lg:mb-12"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-md">
             <Search
@@ -350,15 +467,11 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-          <p
-            className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
-            role="status"
-            aria-live="polite"
-          >
-            {isLoading
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+            {showSkeleton
               ? 'Loading the collection…'
-              : `Showing ${visibleProducts.length} of ${products.length} ${
-                  products.length === 1 ? 'piece' : 'pieces'
+              : `Page ${serverPage} of ${totalPages} · ${total} ${
+                  total === 1 ? 'piece' : 'pieces'
                 }`}
             {activeCollectionName ? ` · ${activeCollectionName}` : ''}
           </p>
@@ -375,8 +488,8 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
         </div>
       </div>
 
-      {isLoading ? (
-        <ProductSkeleton />
+      {showSkeleton ? (
+        <ProductSkeleton count={pageSize} />
       ) : error ? (
         <div className="rounded-2xl border border-destructive/40 bg-surface/70 p-8 text-center backdrop-blur-sm sm:p-12">
           <AlertCircle
@@ -400,23 +513,23 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
             Try again
           </button>
         </div>
-      ) : visibleProducts.length === 0 ? (
+      ) : products.length === 0 ? (
         <div className="rounded-2xl border border-border bg-surface/70 p-8 text-center backdrop-blur-sm sm:p-12">
           <PackageOpen
             className="mx-auto mb-4 h-9 w-9 text-primary/70"
             aria-hidden="true"
           />
           <h3 className="font-display text-2xl text-foreground">
-            {products.length === 0
-              ? 'The collection is being curated'
-              : 'No products match those filters'}
+            {hasNarrowingFilter
+              ? 'No products match those filters'
+              : 'The collection is being curated'}
           </h3>
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-            {products.length === 0
-              ? 'New pieces are being photographed and added. Please check back shortly.'
-              : 'Try a different collection, widen your search, or reset the filters to see everything we make.'}
+            {hasNarrowingFilter
+              ? 'Try a different collection, widen your search, or reset the filters to see everything we make.'
+              : 'New pieces are being photographed and added. Please check back shortly.'}
           </p>
-          {products.length > 0 && (
+          {hasNarrowingFilter && (
             <button
               type="button"
               onClick={clearFilters}
@@ -428,20 +541,36 @@ export default function Shop({ onProductClick, hideHeader = false }: ShopProps) 
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 lg:gap-8">
-          {visibleProducts.map((product, index) => (
-            <div
-              key={product._id ?? product.id ?? `${product.name}-${index}`}
-              className="h-full animate-fade-in-up"
-              style={{ animationDelay: `${(index % 6) * 70}ms` }}
-            >
-              <ProductCard
-                product={product}
-                onViewMore={() => handleProductClick(product)}
-              />
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 lg:gap-8">
+            {products.map((product, index) => (
+              <div
+                key={product._id ?? product.id ?? `${product.name}-${index}`}
+                className="h-full animate-fade-in-up"
+                style={{ animationDelay: `${(index % pageSize) * 70}ms` }}
+              >
+                <ProductCard
+                  product={product}
+                  onViewMore={() => handleProductClick(product)}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Compact pagination strip below the grid. The component owns its
+              own range line ("Showing 1–6 of 24 products") and never
+              renders anything when the catalogue is empty. */}
+          <div className="mt-12">
+            <Pagination
+              page={serverPage}
+              totalPages={totalPages}
+              total={total}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              isBusy={isLoading}
+            />
+          </div>
+        </>
       )}
     </Section>
   )

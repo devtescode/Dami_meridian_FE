@@ -42,7 +42,7 @@ export const CONTACT = {
  * `SOCIALS` renders the handle as text until a real URL is supplied.
  */
 export const SOCIALS = [
-  { id: 'tiktok', label: 'TikTok', handle: 'DAMI MERIDIAN', url: null as string | null },
+  { id: 'tiktok', label: 'TikTok', handle: 'DAMI MERIDIAN', url: "http://www.tiktok.com/@damimeridian" as string | null },
   { id: 'instagram', label: 'Instagram', handle: 'DAMI MERIDIAN', url: null as string | null },
 ] as const
 

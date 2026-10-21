@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Instagram,
@@ -103,13 +104,28 @@ export function Navigation() {
   const toggleRef = useRef<HTMLButtonElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
 
   /**
+   * The pathname of the most recent render. Read inside the focus-restore
+   * cleanup so it can tell "the drawer was dismissed" apart from "the
+   * visitor navigated" — the latter hands focus to the new page instead.
+   */
+  const pathnameRef = useRef(location.pathname)
+  pathnameRef.current = location.pathname
+
+  /** The element that had focus when the drawer opened. */
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
+
+  /** The route the drawer was opened on — used to detect a navigation. */
+  const openedAtPathRef = useRef(location.pathname)
+
+  /**
    * `/shop` is the query-param surface, so it also owns the Shop highlight on
-   * `/products/:id` — a product is reached from the catalogue. Nested paths
-   * (e.g. `/collections/x`) match on their first segment only.
+   * `/products/:id` — a product is reached from the catalogue. Every other
+   * route matches exactly, so a nested path is not highlighted by accident.
    */
   const isActive = (to: string) => {
     if (to === '/shop') {
@@ -134,7 +150,7 @@ export function Navigation() {
     const handleResize = () => {
       if (window.innerWidth >= 1024) setMenuOpen(false)
     }
-    window.addEventListener('resize', handleResize)
+    window.addEventListener('resize', handleResize, { passive: true })
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
@@ -172,11 +188,67 @@ export function Navigation() {
     if (menuOpen) closeRef.current?.focus()
   }, [menuOpen])
 
-  const closeMenu = useCallback(() => {
-    // Only pull focus back when the drawer was actually open.
-    if (menuOpen) toggleRef.current?.focus()
-    setMenuOpen(false)
+  /**
+   * While the drawer is open, everything behind it has to be inert —
+   * otherwise Tab and a screen reader's virtual cursor can still reach the
+   * page, and the `aria-modal="true"` on the panel would be a claim the DOM
+   * does not back up. The admin drawer already behaves this way; mirroring
+   * it here keeps the two shells consistent.
+   *
+   * The drawer is portaled to <body>, so the siblings to inert are simply
+   * the overlay's siblings on the body: the app root, which holds the
+   * header, the page and the footer.
+   */
+  useEffect(() => {
+    if (!menuOpen) return
+    const overlay = overlayRef.current
+    if (!overlay) return
+
+    const inerted: Array<{ element: HTMLElement; wasInert: boolean }> = []
+    for (const sibling of Array.from(document.body.children)) {
+      if (sibling === overlay) continue
+      if (!(sibling instanceof HTMLElement)) continue
+      inerted.push({ element: sibling, wasInert: sibling.inert })
+      sibling.inert = true
+    }
+
+    return () => {
+      for (const { element, wasInert } of inerted) {
+        element.inert = wasInert
+      }
+    }
   }, [menuOpen])
+
+  /**
+   * Remember who opened the drawer so focus can be handed back on close —
+   * Escape, the backdrop, the close button and the nav links all close it.
+   *
+   * A navigation is treated differently: `ScrollToTop` moves focus into the
+   * new page's `#main` landmark, and stealing it back to the header button
+   * would undo that. This runs after the inert effect above, so the page
+   * behind the drawer is interactive again by the time focus is restored.
+   */
+  useEffect(() => {
+    if (!menuOpen) return
+    const active = document.activeElement
+    restoreFocusRef.current = active instanceof HTMLElement ? active : null
+    // The route the drawer was opened on. A different route by the time it
+    // closes means the visitor navigated, not merely dismissed the menu.
+    openedAtPathRef.current = pathnameRef.current
+    return () => {
+      const target = restoreFocusRef.current
+      restoreFocusRef.current = null
+      // A navigation already handed focus to the new page — leave it there.
+      if (pathnameRef.current !== openedAtPathRef.current) return
+      if (target && target.isConnected && target.getClientRects().length > 0) {
+        target.focus()
+      }
+    }
+  }, [menuOpen])
+
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false)
+  }, [])
 
   /**
    * Both the desktop bar and the drawer submit the same term, so one handler
@@ -231,18 +303,16 @@ export function Navigation() {
           <Link
             to="/"
             aria-label={`${BRAND.name} — home`}
-            className="flex min-w-0 shrink items-center gap-2.5 sm:gap-3"
+            className="flex min-w-0 shrink items-center"
           >
-            <img
-              src="/logo-mark.svg"
-              alt=""
-              width={40}
-              height={40}
-              className="h-9 w-9 shrink-0 sm:h-10 sm:w-10"
-            />
-            <span className="min-w-0 truncate font-display text-base leading-none tracking-[0.25em] text-gradient sm:text-lg sm:tracking-[0.3em] lg:text-xl xl:text-2xl">
-              {BRAND.name}
-            </span>
+              <img
+                src="/icon.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-15 w-15 sm:p-0 p-1 shrink-0 sm:h-15 sm:w-15"
+              />
+           
           </Link>
 
           {/* Desktop navigation */}
@@ -254,14 +324,14 @@ export function Navigation() {
                   <Link
                     to={link.to}
                     aria-current={active ? 'page' : undefined}
-                    className={`group relative inline-flex min-h-[2.75rem] items-center px-2 text-xs uppercase tracking-widest transition-colors hover:text-foreground ${
+                    className={`group relative inline-flex min-h-[2.75rem] items-center px-1.5 text-xs uppercase tracking-widest transition-colors hover:text-foreground ${
                       active ? 'text-primary' : 'text-muted-foreground'
                     }`}
                   >
                     {link.label}
                     <span
                       aria-hidden="true"
-                      className={`pointer-events-none absolute inset-x-2 bottom-2 h-px origin-left bg-primary/70 transition-transform duration-300 ${
+                      className={`pointer-events-none absolute inset-x-1.5 bottom-2 h-px origin-left bg-primary/70 transition-transform duration-300 ${
                         active
                           ? 'scale-x-100'
                           : 'scale-x-0 group-hover:scale-x-100'
@@ -291,11 +361,14 @@ export function Navigation() {
             </Link> */}
 
             {/* Compact site search — submits to the shop's `q` param. Below lg
-                the same field lives inside the drawer instead. */}
+                the same field lives inside the drawer instead. Kept at w-28
+                through the lg band so brand + nav links + CTA fit a 1024px
+                viewport without squeezing the brand lockup; xl has room for
+                the wider w-48 field. */}
             <form
               role="search"
               onSubmit={handleSearchSubmit}
-              className="relative hidden w-36 lg:block xl:w-48"
+              className="relative hidden w-36 lg:block lg:w-28 xl:w-48"
             >
               <label htmlFor="nav-search-desktop" className="sr-only">
                 Search products
@@ -351,16 +424,20 @@ export function Navigation() {
         />
       </nav>
 
-      {/* Drawer lives outside the sticky bar so it is never clipped or blurred. */}
-      <div
-        className={`fixed inset-0 z-[60] overflow-hidden lg:hidden ${
-          menuOpen ? 'pointer-events-auto' : 'pointer-events-none'
-        }`}
-      >
+      {/* Drawer is portaled to <body> so no transformed or filtered ancestor
+          can become its containing block and clip or misplace the fixed
+          overlay. The <nav> bar itself stays in the document flow. */}
+      {createPortal(
+        <div
+          ref={overlayRef}
+          className={`fixed inset-x-0 top-0 h-[100dvh] z-[60] overflow-hidden lg:hidden ${
+            menuOpen ? 'pointer-events-auto' : 'pointer-events-none'
+          }`}
+        >
         <div
           aria-hidden="true"
           onClick={closeMenu}
-          className={`absolute inset-0 bg-background/85 backdrop-blur-sm transition-opacity duration-300 ${
+          className={`absolute inset-0 touch-none bg-background/85 backdrop-blur-sm transition-opacity duration-300 ${
             menuOpen ? 'opacity-100' : 'opacity-0'
           }`}
         />
@@ -397,7 +474,7 @@ export function Navigation() {
             </button>
           </div>
 
-          <div className="scrollbar-slim flex-1 overflow-y-auto px-4 py-5">
+          <div className="scrollbar-slim flex-1 overflow-y-auto overscroll-contain px-4 py-5">
             {/* The desktop search field, sized for thumbs. */}
             <form
               role="search"
@@ -446,7 +523,7 @@ export function Navigation() {
             </ul>
           </div>
 
-          <div className="border-t border-border/70 px-5 py-5">
+          <div className="border-t border-border/70 px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
             <Link
               to="/admin"
               onClick={closeMenu}
@@ -473,7 +550,9 @@ export function Navigation() {
             </a>
           </div>
         </div>
-      </div>
+        </div>,
+        document.body,
+      )}
     </>
   )
 }

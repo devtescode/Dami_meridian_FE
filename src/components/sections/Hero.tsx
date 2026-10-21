@@ -104,6 +104,7 @@ export default function Hero() {
                   width={1400}
                   height={2100}
                   loading="eager"
+                  fetchPriority="high"
                   decoding="async"
                   className="h-full w-full object-cover"
                 />
