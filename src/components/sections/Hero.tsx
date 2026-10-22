@@ -33,7 +33,7 @@ export default function Hero() {
         <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-surface/70 to-transparent" />
       </div>
 
-      <Container className="pt-28 pb-16 sm:pt-32 sm:pb-20 lg:pt-36 lg:pb-24">
+      <Container className="pt-20 pb-16 sm:pt-32 sm:pb-20 lg:pt-26 lg:pb-24">
         <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-14 xl:gap-20">
           {/* ---- Copy column ---- */}
           <div className="min-w-0 animate-fade-in-up">
