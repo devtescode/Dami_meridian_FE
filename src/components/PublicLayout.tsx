@@ -12,13 +12,6 @@ import WhatsAppButton from '@/components/WhatsAppButton'
 export default function PublicLayout() {
   return (
     <div className="min-h-screen bg-background">
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
-      >
-        Skip to content
-      </a>
-
       <Navigation />
 
       {/* tabIndex={-1} makes the skip-link target (and route-change focus) actually move focus here in Safari/Firefox; outline-none keeps the ring off a programmatically focused landmark. */}

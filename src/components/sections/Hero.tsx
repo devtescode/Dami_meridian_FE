@@ -123,13 +123,15 @@ export default function Hero() {
         </div>
 
         {/* ---- Trust indicators: 2x2 on mobile, four across from sm ---- */}
-        <ul className="mt-12 grid grid-cols-2 gap-x-6 gap-y-8 sm:mt-14 sm:grid-cols-4 sm:gap-8">
+        <ul className="mx-auto mt-12 grid w-full max-w-md grid-cols-2 justify-items-center gap-x-4 gap-y-8 sm:mt-14 sm:max-w-none sm:grid-cols-4 sm:gap-8">
           {TRUST_POINTS.map(({ icon: Icon, label }) => (
-            <li key={label} className="flex flex-col items-start gap-3">
+            <li key={label} className="flex flex-col items-center gap-3 text-center">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 text-primary">
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </span>
-              <span className="text-sm font-medium leading-snug text-muted-foreground">{label}</span>
+              <span className="text-sm font-medium leading-snug text-muted-foreground">
+                {label}
+              </span>
             </li>
           ))}
         </ul>
