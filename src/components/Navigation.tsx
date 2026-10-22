@@ -46,7 +46,7 @@ function SocialHandle({
     </>
   )
 
-  const base = `inline-flex min-h-[44px] items-center gap-1.5 text-xs uppercase text-muted-foreground ${className}`
+  const base = `inline-flex min-h-[20px] items-center gap-1.5 text-xs uppercase text-muted-foreground ${className}`
 
   if (!social.url) {
     return (
