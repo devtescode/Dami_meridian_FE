@@ -248,8 +248,8 @@ export function Navigation() {
       <nav
         aria-label="Primary"
         className={`sticky top-0 z-50 w-full transition-all duration-500 ease-out ${scrolled
-            ? 'glass-dark shadow-lg shadow-black/40'
-            : 'bg-background/40 backdrop-blur-md'
+          ? 'glass-dark shadow-lg shadow-black/40'
+          : 'bg-background/40 backdrop-blur-md'
           }`}
       >
         <Container className="flex h-16 items-center justify-between gap-3 sm:h-20">
@@ -284,8 +284,8 @@ export function Navigation() {
                     <span
                       aria-hidden="true"
                       className={`pointer-events-none absolute inset-x-1.5 bottom-2 h-px origin-left bg-primary/70 transition-transform duration-300 ${active
-                          ? 'scale-x-100'
-                          : 'scale-x-0 group-hover:scale-x-100'
+                        ? 'scale-x-100'
+                        : 'scale-x-0 group-hover:scale-x-100'
                         }`}
                     />
                   </Link>
@@ -375,7 +375,7 @@ export function Navigation() {
             aria-label="Site menu"
             inert={!menuOpen}
             onKeyDown={handlePanelKeyDown}
-            className={`glass-dark absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col transition-transform duration-300 ease-out will-change-transform ${menuOpen ? 'translate-x-0' : 'translate-x-full'
+            className={`glass-dark absolute inset-y-0 right-0 flex w-[75vw] max-w-sm flex-col transition-transform duration-300 ease-out will-change-transform ${menuOpen ? 'translate-x-0' : 'translate-x-full'
               }`}
           >
             <span
@@ -402,15 +402,17 @@ export function Navigation() {
               <form
                 role="search"
                 onSubmit={handleSearchSubmit}
-                className="relative mb-5"
+                className="relative mb-5 hidden sm:block"
               >
                 <label htmlFor="nav-search-drawer" className="sr-only">
                   Search products
                 </label>
+
                 <Search
                   className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                   aria-hidden="true"
                 />
+
                 <input
                   id="nav-search-drawer"
                   type="search"
@@ -452,15 +454,15 @@ export function Navigation() {
                 ))}
               </div>
 
-              <a
+              {/* <a
                 href={LINKS.whatsapp}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-gold btn-gold-hover mt-5 inline-flex min-h-[2.75rem] w-full items-center justify-center gap-2 rounded-full px-5 text-xs uppercase tracking-[0.18em]"
+                className="btn-gold btn-gold-hover mt-5 inline-flex min-h-[2.5rem] w-auto items-center justify-center gap-2 rounded-full px-4 text-[0.65rem] uppercase tracking-[0.12em] sm:min-h-[2.75rem] sm:px-5 sm:text-xs sm:tracking-[0.18em]"
               >
-                <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
                 WhatsApp
-              </a>
+              </a> */}
             </div>
           </div>
         </div>,
