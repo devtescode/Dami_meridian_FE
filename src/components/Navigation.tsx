@@ -1,15 +1,3 @@
-/**
- * DAMI MERIDIAN — sticky primary navigation.
- *
- * The bar starts light so the hero artwork reads through it, then frosts over
- * with a gold hairline once the page scrolls. Everything below the lg
- * breakpoint collapses into a slide-in drawer so the header never wraps or
- * overflows on a 320px screen.
- *
- * Every destination is a real router <Link>; the current route is picked out
- * in gold with `aria-current="page"`, and the search field routes straight to
- * the shop with the term in the `q` query param.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -49,14 +37,7 @@ const SOCIAL_ICONS: Record<SocialEntry['id'], LucideIcon> = {
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-/**
- * Renders a handle as a link when the brand has a verified profile URL, and as
- * plain text otherwise. The platform name is injected as visually hidden text
- * instead of an `aria-label`: a <span> has an implicit `generic` role, and
- * `aria-label` is prohibited on `generic`, so the platform name would never
- * reach a screen reader. The visible label stays the handle, so the two handles
- * never sound identical out loud.
- */
+
 function SocialHandle({
   social,
   className = '',
@@ -188,17 +169,7 @@ export function Navigation() {
     if (menuOpen) closeRef.current?.focus()
   }, [menuOpen])
 
-  /**
-   * While the drawer is open, everything behind it has to be inert —
-   * otherwise Tab and a screen reader's virtual cursor can still reach the
-   * page, and the `aria-modal="true"` on the panel would be a claim the DOM
-   * does not back up. The admin drawer already behaves this way; mirroring
-   * it here keeps the two shells consistent.
-   *
-   * The drawer is portaled to <body>, so the siblings to inert are simply
-   * the overlay's siblings on the body: the app root, which holds the
-   * header, the page and the footer.
-   */
+ 
   useEffect(() => {
     if (!menuOpen) return
     const overlay = overlayRef.current
@@ -219,15 +190,7 @@ export function Navigation() {
     }
   }, [menuOpen])
 
-  /**
-   * Remember who opened the drawer so focus can be handed back on close —
-   * Escape, the backdrop, the close button and the nav links all close it.
-   *
-   * A navigation is treated differently: `ScrollToTop` moves focus into the
-   * new page's `#main` landmark, and stealing it back to the header button
-   * would undo that. This runs after the inert effect above, so the page
-   * behind the drawer is interactive again by the time focus is restored.
-   */
+ 
   useEffect(() => {
     if (!menuOpen) return
     const active = document.activeElement
@@ -343,25 +306,7 @@ export function Navigation() {
           {/* Secondary links and CTA */}
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {/* Handles only — the brand has no verified profile URLs yet. */}
-            {/* <div className="hidden items-center gap-3 xl:flex">
-              {SOCIALS.map((social) => (
-                <SocialHandle key={social.id} social={social} />
-              ))}
-            </div> */}
-
-            {/* <Link
-              to="/admin"
-              className="hidden min-h-[2.75rem] items-center gap-1.5 rounded-full border border-border px-3 text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-primary/60 hover:text-primary md:inline-flex"
-            >
-              <Shield className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
-              Admin
-            </Link> */}
-
-            {/* Compact site search — submits to the shop's `q` param. Below lg
-                the same field lives inside the drawer instead. Kept at w-28
-                through the lg band so brand + nav links + CTA fit a 1024px
-                viewport without squeezing the brand lockup; xl has room for
-                the wider w-48 field. */}
+         
             <form
               role="search"
               onSubmit={handleSearchSubmit}
@@ -468,7 +413,6 @@ export function Navigation() {
             </div>
 
             <div className="scrollbar-slim flex-1 overflow-y-auto overscroll-contain px-4 py-5">
-              {/* The desktop search field, sized for thumbs. */}
               <form
                 role="search"
                 onSubmit={handleSearchSubmit}
@@ -516,14 +460,7 @@ export function Navigation() {
             </div>
 
             <div className="border-t border-border/70 px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-              {/* <Link
-                to="/admin"
-                onClick={closeMenu}
-                className="flex min-h-[2.75rem] items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-primary"
-              >
-                <Shield className="h-4 w-4 text-primary/80" aria-hidden="true" />
-                Admin
-              </Link> */}
+              
 
               <div className="mt-3 flex flex-col gap-2">
                 {SOCIALS.map((social) => (
