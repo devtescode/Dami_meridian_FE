@@ -247,7 +247,8 @@ export function Navigation() {
     <>
       <nav
         aria-label="Primary"
-        className={`sticky top-0 z-50 w-full transition-all duration-500 ease-out ${scrolled
+        style={{ border: 'none' }}
+        className={`sticky top-0 z-50 w-full border-0 transition-all duration-500 ease-out ${scrolled
           ? 'glass-dark shadow-lg shadow-black/40'
           : 'bg-background/40 backdrop-blur-md'
           }`}
