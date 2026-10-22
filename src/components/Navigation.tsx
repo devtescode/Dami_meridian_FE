@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -36,7 +35,6 @@ const SOCIAL_ICONS: Record<SocialEntry['id'], LucideIcon> = {
 /** Focusable nodes used to keep Tab cycling inside the open drawer. */
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 
 function SocialHandle({
   social,
@@ -140,14 +138,9 @@ export function Navigation() {
     if (!menuOpen) return
     const { body } = document
     const previousOverflow = body.style.overflow
-    const previousPaddingRight = body.style.paddingRight
-    // Compensate for the vanishing scrollbar so the page does not jump sideways.
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
     body.style.overflow = 'hidden'
-    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`
     return () => {
       body.style.overflow = previousOverflow
-      body.style.paddingRight = previousPaddingRight
     }
   }, [menuOpen])
 
@@ -166,10 +159,10 @@ export function Navigation() {
 
   // Move focus into the drawer as soon as it opens.
   useEffect(() => {
-    if (menuOpen) closeRef.current?.focus()
+    if (menuOpen) closeRef.current?.focus({ preventScroll: true })
   }, [menuOpen])
 
- 
+  // Trap the rest of the page: mark every body sibling except the overlay inert.
   useEffect(() => {
     if (!menuOpen) return
     const overlay = overlayRef.current
@@ -190,13 +183,12 @@ export function Navigation() {
     }
   }, [menuOpen])
 
- 
+  // Remember what had focus, and restore it only if the drawer was dismissed
+  // (not if the visitor navigated to a new page).
   useEffect(() => {
     if (!menuOpen) return
     const active = document.activeElement
     restoreFocusRef.current = active instanceof HTMLElement ? active : null
-    // The route the drawer was opened on. A different route by the time it
-    // closes means the visitor navigated, not merely dismissed the menu.
     openedAtPathRef.current = pathnameRef.current
     return () => {
       const target = restoreFocusRef.current
@@ -274,7 +266,6 @@ export function Navigation() {
               height={40}
               className="h-15 w-15 rounded-md border-none p-1 sm:h-15 sm:w-15 sm:p-0"
             />
-
           </Link>
 
           {/* Desktop navigation */}
@@ -305,8 +296,6 @@ export function Navigation() {
 
           {/* Secondary links and CTA */}
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            {/* Handles only — the brand has no verified profile URLs yet. */}
-         
             <form
               role="search"
               onSubmit={handleSearchSubmit}
@@ -365,9 +354,6 @@ export function Navigation() {
         />
       </nav>
 
-      {/* Drawer is portaled to <body> so no transformed or filtered ancestor
-          can become its containing block and clip or misplace the fixed
-          overlay. The <nav> bar itself stays in the document flow. */}
       {createPortal(
         <div
           ref={overlayRef}
@@ -389,7 +375,7 @@ export function Navigation() {
             aria-label="Site menu"
             inert={!menuOpen}
             onKeyDown={handlePanelKeyDown}
-            className={`glass-dark absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col transition-transform duration-300 ease-out ${menuOpen ? 'translate-x-0' : 'translate-x-full'
+            className={`glass-dark absolute inset-y-0 right-0 flex w-[88vw] max-w-sm flex-col transition-transform duration-300 ease-out will-change-transform ${menuOpen ? 'translate-x-0' : 'translate-x-full'
               }`}
           >
             <span
@@ -460,8 +446,6 @@ export function Navigation() {
             </div>
 
             <div className="border-t border-border/70 px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
-              
-
               <div className="mt-3 flex flex-col gap-2">
                 {SOCIALS.map((social) => (
                   <SocialHandle key={social.id} social={social} />
