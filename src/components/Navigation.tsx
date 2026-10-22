@@ -6,12 +6,11 @@ import {
   Instagram,
   Menu,
   MessageCircle,
-  Music,
   Search,
   Shield,
   X,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { FaTiktok } from 'react-icons/fa'
 import { BRAND, LINKS, SOCIALS } from '@/lib/brand'
 import { Container } from '@/components/Section'
 
@@ -26,12 +25,6 @@ const NAV_LINKS = [
 
 type SocialEntry = (typeof SOCIALS)[number]
 
-/** TikTok has no first-party lucide glyph, so its music note stands in. */
-const SOCIAL_ICONS: Record<SocialEntry['id'], LucideIcon> = {
-  instagram: Instagram,
-  tiktok: Music,
-}
-
 /** Focusable nodes used to keep Tab cycling inside the open drawer. */
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -43,7 +36,7 @@ function SocialHandle({
   social: SocialEntry
   className?: string
 }) {
-  const Icon = SOCIAL_ICONS[social.id]
+  const Icon = social.id === 'tiktok' ? FaTiktok : Instagram
   const label = `${social.label} — ${social.handle}`
   const content = (
     <>

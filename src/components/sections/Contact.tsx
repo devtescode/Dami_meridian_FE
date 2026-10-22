@@ -1,18 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Instagram, MapPin, MessageCircle, Music, Phone, Send } from 'lucide-react'
+import { Instagram, MapPin, MessageCircle, Phone, Send } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { FaTiktok } from 'react-icons/fa'
 import { Section } from '@/components/Section'
 import { BRAND, CONTACT, LINKS, SOCIALS } from '@/lib/brand'
 import { buildWhatsAppLink } from '@/lib/whatsapp'
-
-type SocialId = (typeof SOCIALS)[number]['id']
-
-/** Platform icons for the social handles, keyed by the ids used in `SOCIALS`. */
-const SOCIAL_ICONS: Record<SocialId, LucideIcon> = {
-  tiktok: Music,
-  instagram: Instagram,
-}
 
 interface ContactDetail {
   id: string
@@ -170,7 +163,7 @@ export default function Contact() {
               <p className="eyebrow">Follow</p>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 {SOCIALS.map((social) => {
-                  const Icon = SOCIAL_ICONS[social.id]
+                  const Icon = social.id === 'tiktok' ? FaTiktok : Instagram
                   return (
                     // No verified profile URL exists yet, so the handle is shown
                     // as plain text rather than a link to a made-up address.
