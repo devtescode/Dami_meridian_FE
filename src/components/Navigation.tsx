@@ -318,7 +318,7 @@ export function Navigation() {
               />
             </form>
 
-            <a
+            {/* <a
               href={LINKS.whatsapp}
               target="_blank"
               rel="noopener noreferrer"
@@ -326,7 +326,7 @@ export function Navigation() {
             >
               <MessageCircle className="h-4 w-4" aria-hidden="true" />
               WhatsApp
-            </a>
+            </a> */}
 
             <button
               ref={toggleRef}
